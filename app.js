@@ -524,6 +524,7 @@ function createVotingState(participantIds) {
   return {
     remainingIds: shuffleIds(participantIds),
     currentChoices: [],
+    history: [],
     totalParticipants: participantIds.length,
     stepNumber: 1,
   };
@@ -586,6 +587,7 @@ function ensureCurrentChoices(state) {
   const normalized = {
     remainingIds: Array.isArray(state.remainingIds) ? state.remainingIds : [],
     currentChoices: Array.isArray(state.currentChoices) ? state.currentChoices : [],
+    history: Array.isArray(state.history) ? state.history : [],
     totalParticipants: Number(state.totalParticipants || 0),
     stepNumber: Number(state.stepNumber || 1),
   };
@@ -638,11 +640,16 @@ function getVotingProgress(userId, pollId) {
   const progress = getOrCreateUserPollProgress(userId, pollId);
 
   if (progress.completed_at) {
+    const completedState = parseVotingState(progress.voting_state_json);
     const winner = progress.final_winner_participant_id
       ? db.prepare("SELECT id, name FROM participants WHERE id = ?").get(progress.final_winner_participant_id)
       : null;
 
-    return { status: "completed", winner };
+    return {
+      status: "completed",
+      winner,
+      canUndo: Boolean(completedState?.history?.length),
+    };
   }
 
   const participants = getActiveParticipants(pollId);
@@ -685,6 +692,7 @@ function getVotingProgress(userId, pollId) {
     participants: getParticipantsByIds(state.currentChoices, pollId),
     roundNumber: state.stepNumber,
     totalParticipants: state.totalParticipants,
+    canUndo: state.history.length > 0,
   };
 }
 
@@ -1277,6 +1285,14 @@ app.post("/vote", ensureUser, (req, res) => {
     req.headers["user-agent"] || "",
     voteTimestamp,
   );
+  const voteId = Number(db.prepare("SELECT last_insert_rowid() AS id").get().id);
+
+  state.history.push({
+    currentChoices: [...state.currentChoices],
+    remainingIds: [...state.remainingIds],
+    stepNumber: Number(state.stepNumber || 1),
+    voteId,
+  });
 
   state.currentChoices = [];
   const nextState = ensureCurrentChoices(state);
@@ -1284,9 +1300,9 @@ app.post("/vote", ensureUser, (req, res) => {
   if (nextState.currentChoices.length === 0 && nextState.remainingIds.length === 0) {
     db.prepare(`
       UPDATE user_poll_progress
-      SET voting_state_json = NULL, completed_at = ?, final_winner_participant_id = NULL, updated_at = ?
+      SET voting_state_json = ?, completed_at = ?, final_winner_participant_id = NULL, updated_at = ?
       WHERE user_id = ? AND poll_id = ?
-    `).run(voteTimestamp, voteTimestamp, userId, pollId);
+    `).run(JSON.stringify(nextState), voteTimestamp, voteTimestamp, userId, pollId);
 
     return res.redirect(`/polls/${pollSlug || poll.slug}/thanks`);
   } else {
@@ -1300,6 +1316,56 @@ app.post("/vote", ensureUser, (req, res) => {
       pollId,
     );
   }
+
+  res.redirect(`/polls/${pollSlug || poll.slug}`);
+});
+
+app.post("/vote/back", ensureUser, (req, res) => {
+  const pollId = Number(req.body.poll_id);
+  const pollSlug = String(req.body.poll_slug || "");
+  const userId = req.session.user.id;
+  const poll = db.prepare("SELECT id, slug FROM polls WHERE id = ?").get(pollId);
+
+  if (!poll) {
+    return res.status(400).render("error", {
+      title: "Ошибка возврата",
+      message: "Голосование не найдено.",
+    });
+  }
+
+  const progressRow = db
+    .prepare(`
+      SELECT voting_state_json, completed_at
+      FROM user_poll_progress
+      WHERE user_id = ? AND poll_id = ?
+    `)
+    .get(userId, pollId);
+
+  const state = ensureCurrentChoices(parseVotingState(progressRow?.voting_state_json) || createVotingState([]));
+  const lastStep = state.history.pop();
+
+  if (!lastStep) {
+    return res.redirect(`/polls/${pollSlug || poll.slug}`);
+  }
+
+  db.prepare("DELETE FROM votes WHERE id = ? AND voter_user_id = ? AND poll_id = ?").run(
+    Number(lastStep.voteId || 0),
+    userId,
+    pollId,
+  );
+
+  const restoredState = {
+    ...state,
+    currentChoices: Array.isArray(lastStep.currentChoices) ? lastStep.currentChoices : [],
+    remainingIds: Array.isArray(lastStep.remainingIds) ? lastStep.remainingIds : [],
+    stepNumber: Number(lastStep.stepNumber || 1),
+  };
+
+  db.prepare(`
+    UPDATE user_poll_progress
+    SET voting_state_json = ?, completed_at = NULL, final_winner_participant_id = NULL, updated_at = ?
+    WHERE user_id = ? AND poll_id = ?
+  `).run(JSON.stringify(restoredState), nowIso(), userId, pollId);
 
   res.redirect(`/polls/${pollSlug || poll.slug}`);
 });
