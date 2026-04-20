@@ -350,6 +350,61 @@ function buildTelegramAuthUrl(returnToPath = "/") {
   return `${BASE_URL}/auth/telegram/widget?next=${encodeURIComponent(safeReturnPath)}`;
 }
 
+function parsePageParam(value) {
+  const page = Number.parseInt(String(value || "1"), 10);
+  return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
+function paginateItems(items, page, perPage) {
+  const safePerPage = Math.max(1, Number(perPage) || 1);
+  const totalItems = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / safePerPage));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const startIndex = (currentPage - 1) * safePerPage;
+
+  return {
+    items: items.slice(startIndex, startIndex + safePerPage),
+    pagination: {
+      currentPage,
+      totalPages,
+      totalItems,
+      perPage: safePerPage,
+      hasPrev: currentPage > 1,
+      hasNext: currentPage < totalPages,
+    },
+  };
+}
+
+function buildPageHref(query, pageParam, page) {
+  const params = new URLSearchParams();
+
+  Object.entries(query || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item !== undefined && item !== null && item !== "") {
+          params.append(key, String(item));
+        }
+      });
+      return;
+    }
+
+    params.set(key, String(value));
+  });
+
+  if (page <= 1) {
+    params.delete(pageParam);
+  } else {
+    params.set(pageParam, String(page));
+  }
+
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : "";
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
