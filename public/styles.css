@@ -111,6 +111,7 @@ textarea {
   gap: 16px 20px;
   padding: 10px 0 8px;
   text-align: left;
+  width: 100%;
 }
 
 .site-brand-nav {
@@ -154,7 +155,7 @@ textarea {
 
 .site-brand-logo {
   grid-area: logo;
-  justify-self: end;
+  justify-self: start;
   width: min(190px, 34vw);
   height: auto;
   object-fit: contain;
@@ -164,9 +165,12 @@ textarea {
 .site-brand-copy {
   grid-area: copy;
   display: grid;
-  justify-self: start;
+  justify-self: end;
   gap: 4px;
   align-content: center;
+  justify-items: start;
+  text-align: left;
+  max-width: min(560px, 100%);
 }
 
 .site-brand-domain,
@@ -815,6 +819,15 @@ td {
   position: relative;
   overflow: hidden;
   transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+}
+
+.mini-card strong {
+  display: block;
+  width: 100%;
+  font-size: 1.45rem;
+  line-height: 1.15;
+  margin-bottom: 18px;
+  word-break: break-word;
 }
 
 .mini-card span {
