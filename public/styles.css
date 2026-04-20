@@ -392,9 +392,8 @@ textarea:focus-visible,
   background: linear-gradient(180deg, rgba(18, 27, 37, 0.98), rgba(11, 17, 24, 0.96));
   position: relative;
   transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
-  align-items: stretch;
+  display: flex;
+  flex-direction: column;
 }
 
 .contestant::after,
@@ -428,11 +427,11 @@ textarea:focus-visible,
 
 .contestant-media {
   min-height: 220px;
-  border-left: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   background:
     radial-gradient(circle at top, rgba(111, 135, 158, 0.15), transparent 34%),
     linear-gradient(180deg, #17222d, #0d141d);
-  order: 2;
 }
 
 .contestant img {
@@ -443,20 +442,21 @@ textarea:focus-visible,
 }
 
 .contestant-copy {
-  padding: 22px 22px 8px;
-  align-self: end;
+  padding: 22px;
 }
 
 .contestant-copy h2 {
   margin: 0;
   font-family: "Amatic SC", cursive;
   font-size: 2rem;
-  word-break: break-word;
+  line-height: 1.05;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .contestant form {
-  padding: 0 22px 22px;
-  align-self: start;
+  padding: 22px;
+  padding-top: 18px;
 }
 
 .vote-button {
@@ -477,16 +477,6 @@ textarea:focus-visible,
   font-family: "Amatic SC", cursive;
   font-size: 1.2rem;
   font-weight: 700;
-}
-
-.duel-triple .contestant {
-  grid-template-columns: 1fr;
-}
-
-.duel-triple .contestant-media {
-  order: 0;
-  border-left: 0;
-  border-bottom: 1px solid var(--line);
 }
 
 .widget-wrap {
@@ -920,6 +910,17 @@ td {
 
 .smule-embed {
   padding: 20px;
+  max-width: 100%;
+}
+
+.contestant .smule-embed {
+  padding: 18px 22px;
+}
+
+.contestant .smule-embed iframe {
+  width: 100% !important;
+  min-height: 330px;
+  max-height: 430px;
 }
 
 .mini-embed {
@@ -1219,13 +1220,8 @@ td {
     justify-self: center;
   }
 
-  .contestant {
-    grid-template-columns: 1fr;
-  }
-
   .contestant-media {
-    order: 0;
-    border-left: 0;
+    border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
   }
 
@@ -1292,6 +1288,11 @@ td {
 
   .mini-embed-compact {
     max-width: 100%;
+  }
+
+  .contestant .smule-embed iframe {
+    min-height: 280px;
+    max-height: 360px;
   }
 
   .report-chart-card {
@@ -1385,6 +1386,16 @@ td {
   .smule-embed {
     padding-left: 18px;
     padding-right: 18px;
+  }
+
+  .contestant form {
+    padding-top: 14px;
+    padding-bottom: 18px;
+  }
+
+  .contestant .smule-embed iframe {
+    min-height: 240px;
+    max-height: 320px;
   }
 
   .site-footer {

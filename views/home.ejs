@@ -118,13 +118,6 @@
           <div class="notice">
             Вы уже завершили голосование.
           </div>
-          <% if (votingProgress.canUndo) { %>
-            <form method="post" action="/vote/back">
-              <input type="hidden" name="poll_id" value="<%= poll.id %>" />
-              <input type="hidden" name="poll_slug" value="<%= poll.slug %>" />
-              <button class="ghost-button" type="submit">Назад к последнему выбору</button>
-            </form>
-          <% } %>
           <a class="primary-button" href="/polls/<%= poll.slug %>/thanks">Продолжить</a>
         <% } else if (currentUser) { %>
           <div class="notice">

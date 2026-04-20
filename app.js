@@ -640,7 +640,6 @@ function getVotingProgress(userId, pollId) {
   const progress = getOrCreateUserPollProgress(userId, pollId);
 
   if (progress.completed_at) {
-    const completedState = parseVotingState(progress.voting_state_json);
     const winner = progress.final_winner_participant_id
       ? db.prepare("SELECT id, name FROM participants WHERE id = ?").get(progress.final_winner_participant_id)
       : null;
@@ -648,7 +647,7 @@ function getVotingProgress(userId, pollId) {
     return {
       status: "completed",
       winner,
-      canUndo: Boolean(completedState?.history?.length),
+      canUndo: false,
     };
   }
 
@@ -1340,6 +1339,10 @@ app.post("/vote/back", ensureUser, (req, res) => {
       WHERE user_id = ? AND poll_id = ?
     `)
     .get(userId, pollId);
+
+  if (progressRow?.completed_at) {
+    return res.redirect(`/polls/${pollSlug || poll.slug}/thanks`);
+  }
 
   const state = ensureCurrentChoices(parseVotingState(progressRow?.voting_state_json) || createVotingState([]));
   const lastStep = state.history.pop();
