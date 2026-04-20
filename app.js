@@ -99,6 +99,12 @@ db.exec(`
     FOREIGN KEY (poll_id) REFERENCES polls(id),
     FOREIGN KEY (final_winner_participant_id) REFERENCES participants(id)
   );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    sid TEXT PRIMARY KEY,
+    sess TEXT NOT NULL,
+    expired_at INTEGER NOT NULL
+  );
 `);
 
 const participantColumns = db
@@ -219,9 +225,85 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+class SQLiteSessionStore extends session.Store {
+  constructor(database) {
+    super();
+    this.db = database;
+    this.getStmt = this.db.prepare(`
+      SELECT sess
+      FROM sessions
+      WHERE sid = ? AND expired_at >= ?
+    `);
+    this.setStmt = this.db.prepare(`
+      INSERT INTO sessions (sid, sess, expired_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(sid) DO UPDATE SET
+        sess = excluded.sess,
+        expired_at = excluded.expired_at
+    `);
+    this.destroyStmt = this.db.prepare("DELETE FROM sessions WHERE sid = ?");
+    this.touchStmt = this.db.prepare("UPDATE sessions SET expired_at = ? WHERE sid = ?");
+    this.clearExpiredStmt = this.db.prepare("DELETE FROM sessions WHERE expired_at < ?");
+  }
+
+  get(sid, callback) {
+    try {
+      const row = this.getStmt.get(sid, Date.now());
+      if (!row) {
+        return callback(null, null);
+      }
+
+      return callback(null, JSON.parse(row.sess));
+    } catch (error) {
+      return callback(error);
+    }
+  }
+
+  set(sid, sess, callback = () => {}) {
+    try {
+      const expiresAt = this.getExpiresAt(sess);
+      this.setStmt.run(sid, JSON.stringify(sess), expiresAt);
+      this.clearExpiredStmt.run(Date.now());
+      callback(null);
+    } catch (error) {
+      callback(error);
+    }
+  }
+
+  destroy(sid, callback = () => {}) {
+    try {
+      this.destroyStmt.run(sid);
+      callback(null);
+    } catch (error) {
+      callback(error);
+    }
+  }
+
+  touch(sid, sess, callback = () => {}) {
+    try {
+      this.touchStmt.run(this.getExpiresAt(sess), sid);
+      callback(null);
+    } catch (error) {
+      callback(error);
+    }
+  }
+
+  getExpiresAt(sess) {
+    return sess?.cookie?.expires
+      ? new Date(sess.cookie.expires).getTime()
+      : Date.now() + 1000 * 60 * 60 * 24 * 7;
+  }
+}
+
 app.use(
   session({
     secret: SESSION_SECRET,
+    store: new SQLiteSessionStore(db),
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -238,10 +320,6 @@ app.use((req, res, next) => {
   res.locals.isAdmin = Boolean(req.session.isAdmin);
   next();
 });
-
-function nowIso() {
-  return new Date().toISOString();
-}
 
 function buildFullName(profile) {
   if (profile.name) return profile.name;
