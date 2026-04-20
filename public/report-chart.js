@@ -2,8 +2,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const tooltip = document.getElementById("report-chart-tooltip");
   const chart = document.querySelector(".report-chart");
   const segments = document.querySelectorAll(".report-chart-segment");
+  const hitboxes = document.querySelectorAll("[data-tooltip]");
 
-  if (!tooltip || !chart || segments.length === 0) {
+  if (!tooltip || !chart || hitboxes.length === 0) {
     return;
   }
 
@@ -30,14 +31,22 @@ document.addEventListener("DOMContentLoaded", () => {
     tooltip.setAttribute("aria-hidden", "false");
   };
 
-  segments.forEach((segment) => {
-    segment.addEventListener("pointerenter", (event) => showTooltip(segment, event));
-    segment.addEventListener("pointermove", (event) => showTooltip(segment, event));
-    segment.addEventListener("pointerleave", hideTooltip);
-    segment.addEventListener("focus", () => showTooltip(segment));
-    segment.addEventListener("blur", hideTooltip);
-    segment.addEventListener("click", (event) => showTooltip(segment, event));
+  hitboxes.forEach((target) => {
+    target.addEventListener("pointerenter", (event) => showTooltip(target, event));
+    target.addEventListener("pointermove", (event) => showTooltip(target, event));
+    target.addEventListener("pointerleave", hideTooltip);
+    target.addEventListener("mouseenter", (event) => showTooltip(target, event));
+    target.addEventListener("mousemove", (event) => showTooltip(target, event));
+    target.addEventListener("mouseleave", hideTooltip);
+    target.addEventListener("focus", () => showTooltip(target));
+    target.addEventListener("blur", hideTooltip);
+    target.addEventListener("click", (event) => showTooltip(target, event));
+    target.addEventListener("touchstart", (event) => {
+      const touch = event.touches?.[0];
+      showTooltip(target, touch ? { clientX: touch.clientX, clientY: touch.clientY } : undefined);
+    }, { passive: true });
   });
 
   chart.addEventListener("pointerleave", hideTooltip);
+  document.addEventListener("scroll", hideTooltip, { passive: true });
 });

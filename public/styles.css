@@ -999,6 +999,7 @@ td {
   stroke-linecap: butt;
   transition: stroke-width 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
   cursor: pointer;
+  pointer-events: stroke;
 }
 
 .report-chart-segment:hover {
@@ -1075,6 +1076,14 @@ td {
   border-radius: 18px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
+  position: relative;
+}
+
+.report-chart-hitbox {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  cursor: pointer;
 }
 
 .report-chart-swatch {
@@ -1082,10 +1091,14 @@ td {
   height: 14px;
   border-radius: 50%;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
+  position: relative;
+  z-index: 2;
 }
 
 .report-chart-copy {
   min-width: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .report-chart-copy strong,
@@ -1100,6 +1113,8 @@ td {
 .report-chart-percent {
   font-size: 1.35rem;
   white-space: nowrap;
+  position: relative;
+  z-index: 2;
 }
 
 .thanks-panel h1 {
