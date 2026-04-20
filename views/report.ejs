@@ -17,7 +17,7 @@
       <header class="site-brand">
         <nav class="site-brand-nav" aria-label="Основная навигация">
           <a href="https://dsipsmule.one" target="_blank" rel="noreferrer">Главная</a>
-          <a href="/polls/<%= poll.slug %>">Голосование</a>
+          <a href="/">Голосование</a>
           <a href="/polls/<%= poll.slug %>/report">Отчет</a>
         </nav>
         <img
@@ -110,40 +110,55 @@
         </div>
       </section>
 
+      <% 
+        const chartColors = ["#8fa8c1", "#c5d3e1", "#6e86a0", "#d9c39a", "#8bb6a6", "#b991c8", "#86a9b6", "#d28787"];
+        const chartParticipants = report.participants.filter((participant) => participant.voteCount > 0);
+        let chartOffset = 0;
+        const chartSlices = chartParticipants.map((participant, index) => {
+          const percent = report.totals.votes ? (participant.voteCount / report.totals.votes) * 100 : 0;
+          const start = chartOffset;
+          chartOffset += percent;
+          return {
+            ...participant,
+            color: chartColors[index % chartColors.length],
+            percent,
+            start,
+            end: chartOffset,
+          };
+        });
+        const chartBackground = chartSlices.length
+          ? `conic-gradient(${chartSlices
+              .map((slice) => `${slice.color} ${slice.start.toFixed(2)}% ${slice.end.toFixed(2)}%`)
+              .join(", ")})`
+          : "conic-gradient(rgba(255,255,255,0.08) 0 100%)";
+      %>
       <section class="panel">
-        <h2>Последние голоса этапа</h2>
-        <div class="table-wrap">
-          <table class="report-table">
-            <thead>
-              <tr>
-                <th>Когда</th>
-                <th>Telegram ID</th>
-                <th>Пользователь</th>
-                <th>Username</th>
-                <th>Против кого</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% report.recentVotes.forEach((vote) => { %>
-                <tr>
-                  <td data-label="Когда"><%= formatDate(vote.created_at) %></td>
-                  <td data-label="Telegram ID"><%= vote.telegram_id %></td>
-                  <td data-label="Пользователь">
-                    <div class="report-user">
-                      <% if (vote.photo_url) { %>
-                        <img class="report-user-avatar" src="<%= vote.photo_url %>" alt="<%= vote.full_name || vote.telegram_id %>" />
-                      <% } else { %>
-                        <span class="report-user-avatar report-user-fallback"><%= (vote.full_name || vote.telegram_id || "?").trim().charAt(0).toUpperCase() %></span>
-                      <% } %>
-                      <span><%= vote.full_name || "—" %></span>
-                    </div>
-                  </td>
-                  <td data-label="Username"><%= vote.username ? `@${vote.username}` : "—" %></td>
-                  <td data-label="Против кого"><%= vote.loser_name || "—" %></td>
-                </tr>
+        <h2>Распределение голосов</h2>
+        <div class="report-chart-layout">
+          <div class="report-chart-card">
+            <div class="report-chart" style="background: <%- chartBackground %>;">
+              <div class="report-chart-center">
+                <strong><%= report.totals.votes %></strong>
+                <span>голосов</span>
+              </div>
+            </div>
+          </div>
+          <div class="report-chart-legend">
+            <% if (chartSlices.length === 0) { %>
+              <div class="notice">По этому этапу пока нет голосов.</div>
+            <% } else { %>
+              <% chartSlices.forEach((slice) => { %>
+                <div class="report-chart-item">
+                  <span class="report-chart-swatch" style="background: <%= slice.color %>;"></span>
+                  <div class="report-chart-copy">
+                    <strong><%= slice.name %></strong>
+                    <span><%= slice.voteCount %> голосов</span>
+                  </div>
+                  <strong class="report-chart-percent"><%= slice.percent.toFixed(1) %>%</strong>
+                </div>
               <% }) %>
-            </tbody>
-          </table>
+            <% } %>
+          </div>
         </div>
       </section>
 
