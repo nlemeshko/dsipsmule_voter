@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Админка голосования</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell dashboard-shell">
+      <section class="dashboard-topbar">
+        <div>
+          <span class="eyebrow">Панель управления</span>
+          <h1>Статистика голосования</h1>
+        </div>
+        <form method="post" action="/admin/logout">
+          <button class="ghost-button" type="submit">Выйти</button>
+        </form>
+      </section>
+
+      <section class="stat-grid">
+        <article class="stat-card">
+          <span>Голосования</span>
+          <strong><%= totals.polls %></strong>
+        </article>
+        <article class="stat-card">
+          <span>Пользователи Telegram</span>
+          <strong><%= totals.users %></strong>
+        </article>
+        <article class="stat-card">
+          <span>Всего голосов</span>
+          <strong><%= totals.votes %></strong>
+        </article>
+        <article class="stat-card">
+          <span>Активные участники</span>
+          <strong><%= totals.participants %></strong>
+        </article>
+      </section>
+
+      <section class="admin-grid">
+        <article class="panel">
+          <h2>Создать голосование</h2>
+          <form class="stack-form" method="post" action="/admin/polls">
+            <label>
+              <span>Название</span>
+              <input type="text" name="title" required />
+            </label>
+            <label>
+              <span>Slug</span>
+              <input type="text" name="slug" placeholder="stage-1" />
+            </label>
+            <label>
+              <span>Описание</span>
+              <textarea name="description" rows="3"></textarea>
+            </label>
+            <label>
+              <span>Ссылка редиректа после завершения</span>
+              <input type="url" name="redirect_url" value="https://dsipsmule.one" />
+            </label>
+            <button class="primary-button" type="submit">Создать этап</button>
+          </form>
+        </article>
+
+        <article class="panel">
+          <h2>Лидеры</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Участник</th>
+                  <th>Побед</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% leaderboard.forEach((row) => { %>
+                  <tr>
+                    <td><%= row.name %></td>
+                    <td><%= row.wins %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h2>Добавить участника</h2>
+          <form class="stack-form" method="post" action="/admin/participants">
+            <label>
+              <span>Голосование</span>
+              <select name="poll_id" required>
+                <option value="">Выберите этап</option>
+                <% polls.forEach((poll) => { %>
+                  <option value="<%= poll.id %>"><%= poll.title %> (/polls/<%= poll.slug %>)</option>
+                <% }) %>
+              </select>
+            </label>
+            <label>
+              <span>Имя участника</span>
+              <input type="text" name="name" required />
+            </label>
+            <label>
+              <span>Smule iframe</span>
+              <textarea
+                name="embed_html"
+                rows="5"
+                placeholder='<iframe frameborder="0" width="100%" height="125" src="https://www.smule.com/.../frame"></iframe>'
+                required
+              ></textarea>
+            </label>
+            <button class="primary-button" type="submit">Создать</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Ссылки на голосования</h2>
+        <div class="cards-grid">
+          <% polls.forEach((poll) => { %>
+            <article class="mini-card">
+              <div>
+                <strong><%= poll.title %></strong>
+                <p><%= poll.description || "Без описания" %></p>
+                <span><%= baseUrl %>/polls/<%= poll.slug %></span>
+              </div>
+              <form method="post" action="/admin/polls/<%= poll.id %>/delete">
+                <button class="ghost-button danger-button" type="submit">Удалить этап</button>
+              </form>
+            </article>
+          <% }) %>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Участники</h2>
+        <div class="poll-groups">
+          <% pollsWithParticipants.forEach((poll, index) => { %>
+            <details class="poll-group" <%= index === 0 ? "open" : "" %>>
+              <summary class="poll-group-summary">
+                <div>
+                  <strong><%= poll.title %></strong>
+                  <span><%= baseUrl %>/polls/<%= poll.slug %></span>
+                </div>
+                <div class="poll-group-meta">
+                  <span>Участников: <%= poll.participantCount %></span>
+                  <span>Голосов: <%= poll.voteCount %></span>
+                  <span>Людей: <%= poll.uniqueVoterCount %></span>
+                </div>
+              </summary>
+
+              <% if (poll.participants.length === 0) { %>
+                <div class="notice">В этом этапе пока нет участников.</div>
+              <% } else { %>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Имя</th>
+                        <th>Статус</th>
+                        <th>Smule embed</th>
+                        <th>Статистика</th>
+                        <th>Редактирование</th>
+                        <th>Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <% poll.participants.forEach((participant) => { %>
+                        <tr>
+                          <td class="participant-name-cell"><strong><%= participant.name %></strong></td>
+                          <td><%= participant.is_active ? "Активен" : "Отключен" %></td>
+                          <td class="payload-cell">
+                            <% if (participant.embed_html) { %>
+                              <div class="mini-embed"><%- participant.embed_html %></div>
+                            <% } else { %>
+                              <div class="notice">Smule embed не добавлен.</div>
+                            <% } %>
+                          </td>
+                          <td class="participant-stats-cell">
+                            <details class="participant-votes">
+                              <summary>
+                                <strong><%= participant.voteCount %></strong>
+                                <span>голосов</span>
+                              </summary>
+                              <% if (participant.voteDetails.length === 0) { %>
+                                <div class="notice">За этого участника еще не голосовали.</div>
+                              <% } else { %>
+                                <div class="table-wrap">
+                                  <table>
+                                    <thead>
+                                      <tr>
+                                        <th>Когда</th>
+                                        <th>Telegram ID</th>
+                                        <th>Имя</th>
+                                        <th>Username</th>
+                                        <th>Против кого</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <% participant.voteDetails.forEach((vote) => { %>
+                                        <tr>
+                                          <td><%= formatDate(vote.created_at) %></td>
+                                          <td><%= vote.telegram_id %></td>
+                                          <td><%= vote.full_name || "—" %></td>
+                                          <td><%= vote.username ? `@${vote.username}` : "—" %></td>
+                                          <td><%= vote.loser_name || "—" %></td>
+                                        </tr>
+                                      <% }) %>
+                                    </tbody>
+                                  </table>
+                                </div>
+                              <% } %>
+                            </details>
+                          </td>
+                          <td class="participant-edit-cell">
+                            <form class="stack-form participant-edit-form" method="post" action="/admin/participants/<%= participant.id %>/update">
+                              <label>
+                                <span>Имя участника</span>
+                                <input type="text" name="name" value="<%= participant.name %>" required />
+                              </label>
+                              <label>
+                                <span>Smule iframe</span>
+                                <textarea name="embed_html" rows="5" required><%= participant.embed_html || "" %></textarea>
+                              </label>
+                              <button class="primary-button" type="submit">Сохранить</button>
+                            </form>
+                          </td>
+                          <td class="participant-actions">
+                            <form method="post" action="/admin/participants/<%= participant.id %>/toggle">
+                              <button class="ghost-button" type="submit">
+                                <%= participant.is_active ? "Отключить" : "Включить" %>
+                              </button>
+                            </form>
+                            <form method="post" action="/admin/participants/<%= participant.id %>/delete">
+                              <button class="ghost-button danger-button" type="submit">Удалить</button>
+                            </form>
+                          </td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+              <% } %>
+            </details>
+          <% }) %>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Кто вошел через Telegram</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Telegram ID</th>
+                <th>Имя</th>
+                <th>Username</th>
+                <th>Raw Telegram payload</th>
+                <th>Первый вход</th>
+                <th>Последний вход</th>
+                <th>Входов</th>
+                <th>Голоса</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% recentUsers.forEach((user) => { %>
+                <tr>
+                  <td><%= user.telegram_id %></td>
+                  <td><%= user.full_name || "—" %></td>
+                  <td><%= user.username ? `@${user.username}` : "—" %></td>
+                  <td class="payload-cell">
+                    <details>
+                      <summary>Показать</summary>
+                      <pre><%= user.raw_profile_json || "{}" %></pre>
+                    </details>
+                  </td>
+                  <td><%= formatDate(user.first_login_at) %></td>
+                  <td><%= formatDate(user.last_login_at) %></td>
+                  <td><%= user.login_count %></td>
+                  <td>
+                    <form method="post" action="/admin/users/<%= user.id %>/reset-votes">
+                      <button class="ghost-button danger-button" type="submit">Сбросить</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Последние голоса</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Когда</th>
+                <th>Telegram ID</th>
+                <th>Имя</th>
+                <th>Username</th>
+                <th>Выбрал</th>
+                <th>Против</th>
+                <th>Этап</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% recentVotes.forEach((vote) => { %>
+                <tr>
+                  <td><%= formatDate(vote.created_at) %></td>
+                  <td><%= vote.telegram_id %></td>
+                  <td><%= vote.full_name || "—" %></td>
+                  <td><%= vote.username ? `@${vote.username}` : "—" %></td>
+                  <td><%= vote.winner_name %></td>
+                  <td><%= vote.loser_name %></td>
+                  <td><%= vote.poll_title %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

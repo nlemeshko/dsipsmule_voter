@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      DB_PATH: /app/storage/voting.sqlite
+    volumes:
+      - voting_storage:/app/storage
+    restart: unless-stopped
+
+volumes:
+  voting_storage:

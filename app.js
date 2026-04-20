@@ -1,0 +1,1167 @@
+const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
+const express = require("express");
+const session = require("express-session");
+const Database = require("better-sqlite3");
+const dotenv = require("dotenv");
+
+dotenv.config();
+
+const app = express();
+const PORT = Number(process.env.PORT || 3000);
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || "";
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+const SESSION_SECRET =
+  process.env.SESSION_SECRET || "replace-this-with-a-long-random-secret";
+const DB_PATH =
+  process.env.DB_PATH || path.join(__dirname, "storage", "voting.sqlite");
+
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+
+const db = new Database(DB_PATH);
+db.pragma("journal_mode = WAL");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS polls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    redirect_url TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS telegram_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id TEXT NOT NULL UNIQUE,
+    first_name TEXT,
+    last_name TEXT,
+    full_name TEXT,
+    username TEXT,
+    photo_url TEXT,
+    phone_number TEXT,
+    raw_profile_json TEXT,
+    voting_state_json TEXT,
+    voting_completed_at TEXT,
+    final_winner_participant_id INTEGER,
+    login_count INTEGER NOT NULL DEFAULT 0,
+    first_login_at TEXT NOT NULL,
+    last_login_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS participants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT,
+    image_url TEXT,
+    embed_html TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (poll_id) REFERENCES polls(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS votes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_id INTEGER,
+    voter_user_id INTEGER NOT NULL,
+    winner_participant_id INTEGER NOT NULL,
+    loser_participant_id INTEGER NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (poll_id) REFERENCES polls(id),
+    FOREIGN KEY (voter_user_id) REFERENCES telegram_users(id),
+    FOREIGN KEY (winner_participant_id) REFERENCES participants(id),
+    FOREIGN KEY (loser_participant_id) REFERENCES participants(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS user_poll_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    poll_id INTEGER NOT NULL,
+    voting_state_json TEXT,
+    completed_at TEXT,
+    final_winner_participant_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(user_id, poll_id),
+    FOREIGN KEY (user_id) REFERENCES telegram_users(id),
+    FOREIGN KEY (poll_id) REFERENCES polls(id),
+    FOREIGN KEY (final_winner_participant_id) REFERENCES participants(id)
+  );
+`);
+
+const participantColumns = db
+  .prepare("PRAGMA table_info(participants)")
+  .all()
+  .map((column) => column.name);
+
+if (!participantColumns.includes("embed_html")) {
+  db.exec("ALTER TABLE participants ADD COLUMN embed_html TEXT");
+}
+
+if (!participantColumns.includes("poll_id")) {
+  db.exec("ALTER TABLE participants ADD COLUMN poll_id INTEGER");
+}
+
+const userColumns = db
+  .prepare("PRAGMA table_info(telegram_users)")
+  .all()
+  .map((column) => column.name);
+
+if (!userColumns.includes("voting_state_json")) {
+  db.exec("ALTER TABLE telegram_users ADD COLUMN voting_state_json TEXT");
+}
+
+if (!userColumns.includes("voting_completed_at")) {
+  db.exec("ALTER TABLE telegram_users ADD COLUMN voting_completed_at TEXT");
+}
+
+if (!userColumns.includes("final_winner_participant_id")) {
+  db.exec("ALTER TABLE telegram_users ADD COLUMN final_winner_participant_id INTEGER");
+}
+
+const voteColumns = db
+  .prepare("PRAGMA table_info(votes)")
+  .all()
+  .map((column) => column.name);
+
+if (!voteColumns.includes("poll_id")) {
+  db.exec("ALTER TABLE votes ADD COLUMN poll_id INTEGER");
+}
+
+function slugify(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function ensureDefaultPoll() {
+  const existing = db.prepare("SELECT id FROM polls ORDER BY id ASC LIMIT 1").get();
+  if (existing) return existing.id;
+
+  const timestamp = nowIso();
+  const result = db.prepare(`
+    INSERT INTO polls (title, slug, description, redirect_url, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 1, ?, ?)
+  `).run(
+    "Этап 1",
+    "stage-1",
+    "Первое голосование",
+    "https://dsipsmule.one",
+    timestamp,
+    timestamp,
+  );
+
+  return Number(result.lastInsertRowid);
+}
+
+const defaultPollId = ensureDefaultPoll();
+
+db.prepare("UPDATE participants SET poll_id = ? WHERE poll_id IS NULL").run(defaultPollId);
+db.prepare("UPDATE votes SET poll_id = ? WHERE poll_id IS NULL").run(defaultPollId);
+
+const participantCount = db
+  .prepare("SELECT COUNT(*) AS count FROM participants")
+  .get().count;
+
+if (participantCount === 0) {
+  const seed = db.prepare(`
+    INSERT INTO participants (poll_id, name, description, image_url, embed_html, created_at, updated_at)
+    VALUES (@poll_id, @name, @description, @image_url, @embed_html, @created_at, @updated_at)
+  `);
+
+  const now = new Date().toISOString();
+  [
+    {
+      name: "Участник 1",
+      description: "Замените на реального участника в админке.",
+      image_url:
+        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=900&q=80",
+      embed_html: "",
+      poll_id: defaultPollId,
+    },
+    {
+      name: "Участник 2",
+      description: "Замените на реального участника в админке.",
+      image_url:
+        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=80",
+      embed_html: "",
+      poll_id: defaultPollId,
+    },
+    {
+      name: "Участник 3",
+      description: "Замените на реального участника в админке.",
+      image_url:
+        "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=900&q=80",
+      embed_html: "",
+      poll_id: defaultPollId,
+    },
+  ].forEach((row) => seed.run({ ...row, created_at: now, updated_at: now }));
+}
+
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
+app.use(
+  session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    },
+  }),
+);
+
+app.use((req, res, next) => {
+  res.locals.currentUser = req.session.user || null;
+  res.locals.isAdmin = Boolean(req.session.isAdmin);
+  next();
+});
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function buildFullName(profile) {
+  if (profile.name) return profile.name;
+  return [profile.given_name, profile.first_name, profile.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function ensureUser(req, res, next) {
+  if (!req.session.user) {
+    return res.redirect("/");
+  }
+  next();
+}
+
+function ensureAdmin(req, res, next) {
+  if (!req.session.isAdmin) {
+    return res.redirect("/admin/login");
+  }
+  next();
+}
+
+function shuffleIds(ids) {
+  const shuffled = [...ids];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = crypto.randomInt(index + 1);
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
+function createVotingState(participantIds) {
+  return {
+    remainingIds: shuffleIds(participantIds),
+    currentChoices: [],
+    totalParticipants: participantIds.length,
+    stepNumber: 1,
+  };
+}
+
+function parseVotingState(rawState) {
+  if (!rawState) return null;
+  try {
+    return JSON.parse(rawState);
+  } catch {
+    return null;
+  }
+}
+
+function getPolls() {
+  return db
+    .prepare(`
+      SELECT id, title, slug, description, redirect_url, is_active, created_at
+      FROM polls
+      ORDER BY created_at ASC, id ASC
+    `)
+    .all();
+}
+
+function getPollBySlug(slug) {
+  return db
+    .prepare(`
+      SELECT id, title, slug, description, redirect_url, is_active
+      FROM polls
+      WHERE slug = ?
+    `)
+    .get(slug);
+}
+
+function getActiveParticipants(pollId) {
+  return db
+    .prepare(`
+      SELECT id, name, description, image_url, embed_html
+      FROM participants
+      WHERE poll_id = ? AND is_active = 1
+      ORDER BY id ASC
+    `)
+    .all(pollId);
+}
+
+function getParticipantsByIds(ids, pollId) {
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `SELECT id, name, description, image_url, embed_html FROM participants WHERE poll_id = ? AND id IN (${placeholders})`,
+    )
+    .all(pollId, ...ids);
+
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function ensureCurrentChoices(state) {
+  const normalized = {
+    remainingIds: Array.isArray(state.remainingIds) ? state.remainingIds : [],
+    currentChoices: Array.isArray(state.currentChoices) ? state.currentChoices : [],
+    totalParticipants: Number(state.totalParticipants || 0),
+    stepNumber: Number(state.stepNumber || 1),
+  };
+
+  if (normalized.currentChoices.length === 0 && normalized.remainingIds.length > 0) {
+    const choiceSize = normalized.remainingIds.length % 2 === 1 ? 3 : 2;
+    normalized.currentChoices = normalized.remainingIds.splice(0, choiceSize);
+  }
+
+  return normalized;
+}
+
+function getOrCreateUserPollProgress(userId, pollId) {
+  const existing = db
+    .prepare(`
+      SELECT
+        id,
+        voting_state_json,
+        completed_at,
+        final_winner_participant_id
+      FROM user_poll_progress
+      WHERE user_id = ? AND poll_id = ?
+    `)
+    .get(userId, pollId);
+
+  if (existing) {
+    return existing;
+  }
+
+  const timestamp = nowIso();
+  db.prepare(`
+    INSERT INTO user_poll_progress (user_id, poll_id, voting_state_json, completed_at, final_winner_participant_id, created_at, updated_at)
+    VALUES (?, ?, NULL, NULL, NULL, ?, ?)
+  `).run(userId, pollId, timestamp, timestamp);
+
+  return db
+    .prepare(`
+      SELECT
+        id,
+        voting_state_json,
+        completed_at,
+        final_winner_participant_id
+      FROM user_poll_progress
+      WHERE user_id = ? AND poll_id = ?
+    `)
+    .get(userId, pollId);
+}
+
+function getVotingProgress(userId, pollId) {
+  const progress = getOrCreateUserPollProgress(userId, pollId);
+
+  if (progress.completed_at) {
+    const winner = progress.final_winner_participant_id
+      ? db.prepare("SELECT id, name FROM participants WHERE id = ?").get(progress.final_winner_participant_id)
+      : null;
+
+    return { status: "completed", winner };
+  }
+
+  const participants = getActiveParticipants(pollId);
+  if (participants.length < 2) {
+    return { status: "not_enough_participants" };
+  }
+
+  let state = parseVotingState(progress.voting_state_json);
+  const activeIds = new Set(participants.map((participant) => participant.id));
+  const stateIds = state
+    ? [...(state.remainingIds || []), ...(state.currentChoices || [])]
+    : [];
+  const stateIsUsable = state && stateIds.every((id) => activeIds.has(id));
+
+  if (!stateIsUsable) {
+    state = createVotingState(participants.map((participant) => participant.id));
+  }
+
+  state = ensureCurrentChoices(state);
+  db.prepare("UPDATE user_poll_progress SET voting_state_json = ?, updated_at = ? WHERE user_id = ? AND poll_id = ?").run(
+    JSON.stringify(state),
+    nowIso(),
+    userId,
+    pollId,
+  );
+
+  if (state.currentChoices.length === 0 && state.remainingIds.length === 0) {
+    db.prepare(`
+      UPDATE user_poll_progress
+      SET voting_state_json = NULL, completed_at = ?, final_winner_participant_id = NULL, updated_at = ?
+      WHERE user_id = ? AND poll_id = ?
+    `).run(nowIso(), nowIso(), userId, pollId);
+
+    return { status: "completed", winner: null };
+  }
+
+  return {
+    status: "active",
+    stageType: state.currentChoices.length === 3 ? "triple" : "pair",
+    participants: getParticipantsByIds(state.currentChoices, pollId),
+    roundNumber: state.stepNumber,
+    totalParticipants: state.totalParticipants,
+  };
+}
+
+function adminStats() {
+  const totals = {
+    polls: db.prepare("SELECT COUNT(*) AS count FROM polls").get().count,
+    users: db.prepare("SELECT COUNT(*) AS count FROM telegram_users").get().count,
+    votes: db.prepare("SELECT COUNT(*) AS count FROM votes").get().count,
+    participants: db
+      .prepare("SELECT COUNT(*) AS count FROM participants WHERE is_active = 1")
+      .get().count,
+  };
+
+  const leaderboard = db
+    .prepare(`
+      SELECT
+        p.id,
+        p.poll_id,
+        p.name,
+        p.description,
+        p.image_url,
+        p.embed_html,
+        poll.title AS poll_title,
+        COUNT(v.id) AS wins
+      FROM participants p
+      JOIN polls poll ON poll.id = p.poll_id
+      LEFT JOIN votes v ON v.winner_participant_id = p.id
+      WHERE p.is_active = 1
+      GROUP BY p.id
+      ORDER BY wins DESC, p.name ASC
+    `)
+    .all();
+
+  const recentVotes = db
+    .prepare(`
+      SELECT
+        v.id,
+        v.created_at,
+        poll.title AS poll_title,
+        tu.telegram_id,
+        tu.full_name,
+        tu.username,
+        winner.name AS winner_name,
+        loser.name AS loser_name
+      FROM votes v
+      JOIN polls poll ON poll.id = v.poll_id
+      JOIN telegram_users tu ON tu.id = v.voter_user_id
+      JOIN participants winner ON winner.id = v.winner_participant_id
+      JOIN participants loser ON loser.id = v.loser_participant_id
+      ORDER BY v.created_at DESC
+      LIMIT 100
+    `)
+    .all();
+
+  const recentUsers = db
+    .prepare(`
+      SELECT
+        id,
+        telegram_id,
+        full_name,
+        username,
+        raw_profile_json,
+        first_login_at,
+        last_login_at,
+        login_count,
+        photo_url
+      FROM telegram_users
+      ORDER BY last_login_at DESC
+      LIMIT 100
+    `)
+    .all();
+
+  const participants = db
+    .prepare(`
+      SELECT p.id, p.name, p.description, p.image_url, p.embed_html, p.is_active, p.created_at, p.updated_at, p.poll_id, poll.title AS poll_title, poll.slug AS poll_slug
+      FROM participants p
+      LEFT JOIN polls poll ON poll.id = p.poll_id
+      ORDER BY p.created_at DESC
+    `)
+    .all();
+
+  const polls = getPolls();
+  const participantVoteRows = db
+    .prepare(`
+      SELECT
+        v.id,
+        v.poll_id,
+        v.winner_participant_id,
+        v.loser_participant_id,
+        v.created_at,
+        tu.telegram_id,
+        tu.full_name,
+        tu.username,
+        loser.name AS loser_name
+      FROM votes v
+      JOIN telegram_users tu ON tu.id = v.voter_user_id
+      JOIN participants loser ON loser.id = v.loser_participant_id
+      ORDER BY v.created_at DESC
+    `)
+    .all();
+
+  const votesByWinnerId = new Map();
+  participantVoteRows.forEach((row) => {
+    const current = votesByWinnerId.get(row.winner_participant_id) || [];
+    current.push(row);
+    votesByWinnerId.set(row.winner_participant_id, current);
+  });
+
+  const pollsWithParticipants = polls.map((poll) => {
+    const pollParticipants = participants
+      .filter((participant) => participant.poll_id === poll.id)
+      .map((participant) => {
+        const voteDetails = votesByWinnerId.get(participant.id) || [];
+        return {
+          ...participant,
+          voteCount: voteDetails.length,
+          voteDetails,
+        };
+      });
+
+    const pollVoteCount = pollParticipants.reduce((sum, participant) => sum + participant.voteCount, 0);
+    const uniqueVoterCount = new Set(
+      pollParticipants.flatMap((participant) => participant.voteDetails.map((vote) => vote.telegram_id)),
+    ).size;
+
+    return {
+      ...poll,
+      participantCount: pollParticipants.length,
+      voteCount: pollVoteCount,
+      uniqueVoterCount,
+      participants: pollParticipants,
+    };
+  });
+
+  return { totals, leaderboard, recentVotes, recentUsers, participants, polls, pollsWithParticipants };
+}
+
+function verifyTelegramLogin(payload) {
+  if (!TELEGRAM_BOT_TOKEN) {
+    return false;
+  }
+
+  const incomingHash = String(payload.hash || "").toLowerCase();
+  if (!incomingHash) {
+    return false;
+  }
+
+  const dataCheckString = Object.keys(payload)
+    .filter((key) => key !== "hash" && payload[key] !== undefined && payload[key] !== null && payload[key] !== "")
+    .sort()
+    .map((key) => `${key}=${payload[key]}`)
+    .join("\n");
+
+  const secretKey = crypto
+    .createHash("sha256")
+    .update(TELEGRAM_BOT_TOKEN)
+    .digest();
+
+  const expectedHash = crypto
+    .createHmac("sha256", secretKey)
+    .update(dataCheckString)
+    .digest("hex");
+
+  const authDate = Number(payload.auth_date || 0);
+  const ageInSeconds = Math.floor(Date.now() / 1000) - authDate;
+
+  if (expectedHash.length !== incomingHash.length) {
+    return false;
+  }
+
+  return (
+    crypto.timingSafeEqual(
+      Buffer.from(expectedHash, "utf8"),
+      Buffer.from(incomingHash, "utf8"),
+    ) &&
+    Number.isFinite(authDate) &&
+    ageInSeconds >= 0 &&
+    ageInSeconds < 60 * 60 * 24
+  );
+}
+
+function normalizeTelegramAuthPayload(source) {
+  return {
+    id: source.id ? String(source.id) : "",
+    first_name: source.first_name ? String(source.first_name) : "",
+    last_name: source.last_name ? String(source.last_name) : "",
+    username: source.username ? String(source.username) : "",
+    photo_url: source.photo_url ? String(source.photo_url) : "",
+    auth_date: source.auth_date ? String(source.auth_date) : "",
+    hash: source.hash ? String(source.hash) : "",
+  };
+}
+
+function upsertTelegramUser(profile) {
+  const timestamp = nowIso();
+  const telegramId = String(profile.id);
+
+  const existing = db
+    .prepare("SELECT id, login_count FROM telegram_users WHERE telegram_id = ?")
+    .get(telegramId);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE telegram_users
+      SET
+        first_name = @first_name,
+        last_name = @last_name,
+        full_name = @full_name,
+        username = @username,
+        photo_url = @photo_url,
+        phone_number = @phone_number,
+        raw_profile_json = @raw_profile_json,
+        login_count = @login_count,
+        last_login_at = @last_login_at,
+        updated_at = @updated_at
+      WHERE telegram_id = @telegram_id
+    `).run({
+      telegram_id: telegramId,
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      full_name: profile.full_name,
+      username: profile.username,
+      photo_url: profile.photo_url,
+      phone_number: profile.phone_number,
+      raw_profile_json: profile.raw_profile_json,
+      login_count: existing.login_count + 1,
+      last_login_at: timestamp,
+      updated_at: timestamp,
+    });
+  } else {
+    db.prepare(`
+      INSERT INTO telegram_users (
+        telegram_id,
+        first_name,
+        last_name,
+        full_name,
+        username,
+        photo_url,
+        phone_number,
+        raw_profile_json,
+        login_count,
+        first_login_at,
+        last_login_at,
+        created_at,
+        updated_at
+      ) VALUES (
+        @telegram_id,
+        @first_name,
+        @last_name,
+        @full_name,
+        @username,
+        @photo_url,
+        @phone_number,
+        @raw_profile_json,
+        @login_count,
+        @first_login_at,
+        @last_login_at,
+        @created_at,
+        @updated_at
+      )
+    `).run({
+      telegram_id: telegramId,
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      full_name: profile.full_name,
+      username: profile.username,
+      photo_url: profile.photo_url,
+      phone_number: profile.phone_number,
+      raw_profile_json: profile.raw_profile_json,
+      login_count: 1,
+      first_login_at: timestamp,
+      last_login_at: timestamp,
+      created_at: timestamp,
+      updated_at: timestamp,
+    });
+  }
+
+  return db
+    .prepare(
+      `SELECT
+        id,
+        telegram_id,
+        full_name,
+        username,
+        phone_number,
+        photo_url,
+        voting_completed_at,
+        final_winner_participant_id
+      FROM telegram_users
+      WHERE telegram_id = ?`,
+    )
+    .get(telegramId);
+}
+
+app.get("/", (req, res) => {
+  req.session.returnTo = "/";
+  const polls = getPolls();
+  res.render("polls-index", {
+    polls,
+    telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
+    telegramBotUsername: TELEGRAM_BOT_USERNAME,
+    telegramAuthUrl: `${BASE_URL}/auth/telegram/widget`,
+  });
+});
+
+app.get("/polls/:slug", (req, res) => {
+  req.session.returnTo = `/polls/${req.params.slug}`;
+  const poll = getPollBySlug(req.params.slug);
+  if (!poll || !poll.is_active) {
+    return res.status(404).render("error", {
+      title: "Голосование не найдено",
+      message: "Проверьте ссылку на голосование.",
+    });
+  }
+
+  const votingProgress = req.session.user ? getVotingProgress(req.session.user.id, poll.id) : null;
+  const telegramStatus =
+    req.query.tg_login === "success"
+      ? "Вход через Telegram выполнен."
+      : req.query.tg_error === "verify_failed"
+        ? "Telegram логин не прошел проверку подписи."
+        : req.query.tg_error === "config"
+          ? "Telegram не настроен на сервере."
+          : null;
+
+  res.render("home", {
+    poll,
+    votingProgress,
+    error: null,
+    telegramStatus,
+    telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
+    telegramBotUsername: TELEGRAM_BOT_USERNAME,
+    telegramAuthUrl: `${BASE_URL}/auth/telegram/widget`,
+  });
+});
+
+app.get("/health", (req, res) => {
+  res.json({
+    ok: true,
+    uptime: process.uptime(),
+    timestamp: nowIso(),
+  });
+});
+
+app.get("/polls/:slug/thanks", (req, res) => {
+  const poll = getPollBySlug(req.params.slug);
+  if (!poll) {
+    return res.status(404).render("error", {
+      title: "Голосование не найдено",
+      message: "Проверьте ссылку на голосование.",
+    });
+  }
+
+  res.render("thanks", {
+    redirectUrl: poll.redirect_url || "https://dsipsmule.one",
+  });
+});
+
+function finishTelegramLogin(req, res, payload, mode = "json") {
+  const returnTo = req.session.returnTo || "/";
+  console.log("Telegram auth attempt", {
+    mode,
+    id: payload.id || null,
+    username: payload.username || null,
+    auth_date: payload.auth_date || null,
+    has_hash: Boolean(payload.hash),
+  });
+
+  if (!TELEGRAM_BOT_USERNAME || !TELEGRAM_BOT_TOKEN) {
+    if (mode === "redirect") {
+      const separator = returnTo.includes("?") ? "&" : "?";
+      return res.redirect(`${returnTo}${separator}tg_error=config`);
+    }
+
+    return res.status(500).json({
+      ok: false,
+      error: "Telegram widget не настроен на сервере.",
+    });
+  }
+
+  if (!verifyTelegramLogin(payload)) {
+    console.error("Telegram login verification failed", payload);
+
+    if (mode === "redirect") {
+      const separator = returnTo.includes("?") ? "&" : "?";
+      return res.redirect(`${returnTo}${separator}tg_error=verify_failed`);
+    }
+
+    return res.status(401).json({
+      ok: false,
+      error: "Не удалось проверить подпись Telegram.",
+    });
+  }
+
+  const profile = {
+    id: payload.id,
+    first_name: String(payload.first_name || ""),
+    last_name: String(payload.last_name || ""),
+    full_name: buildFullName(payload),
+    username: String(payload.username || ""),
+    photo_url: String(payload.photo_url || ""),
+    phone_number: "",
+    raw_profile_json: JSON.stringify(payload),
+  };
+
+  const user = upsertTelegramUser(profile);
+  req.session.user = user;
+  req.session.save(() => {
+    console.log("Telegram auth success", {
+      telegram_id: user.telegram_id,
+      username: user.username,
+    });
+
+    if (mode === "redirect") {
+      const separator = returnTo.includes("?") ? "&" : "?";
+      return res.redirect(`${returnTo}${separator}tg_login=success`);
+    }
+
+    return res.json({ ok: true });
+  });
+}
+
+app.get("/auth/telegram/widget", (req, res) => {
+  const payload = normalizeTelegramAuthPayload(req.query || {});
+  finishTelegramLogin(req, res, payload, "redirect");
+});
+
+app.post("/auth/telegram/widget", (req, res) => {
+  const payload = normalizeTelegramAuthPayload(req.body || {});
+  finishTelegramLogin(req, res, payload, "json");
+});
+
+app.post("/auth/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.redirect("/");
+  });
+});
+
+app.post("/vote", ensureUser, (req, res) => {
+  const pollId = Number(req.body.poll_id);
+  const pollSlug = String(req.body.poll_slug || "");
+  const winnerId = Number(req.body.winner_id);
+  const userId = req.session.user.id;
+  const poll = db.prepare("SELECT id, slug FROM polls WHERE id = ?").get(pollId);
+
+  if (!poll) {
+    return res.status(400).render("error", {
+      title: "Ошибка голосования",
+      message: "Голосование не найдено.",
+    });
+  }
+
+  const progress = getVotingProgress(userId, pollId);
+
+  if (progress.status === "completed") {
+    return res.redirect(`/polls/${poll.slug}/thanks`);
+  }
+
+  if (progress.status !== "active") {
+    return res.status(400).render("error", {
+      title: "Ошибка голосования",
+      message: "Сейчас голосование недоступно.",
+    });
+  }
+
+  const choiceIds = progress.participants.map((participant) => participant.id);
+  if (!winnerId || !choiceIds.includes(winnerId)) {
+    return res.status(400).render("error", {
+      title: "Ошибка голосования",
+      message: "Неверный выбор для текущего этапа.",
+    });
+  }
+
+  const rawUserState = db
+    .prepare("SELECT voting_state_json FROM user_poll_progress WHERE user_id = ? AND poll_id = ?")
+    .get(userId, pollId);
+  const state = ensureCurrentChoices(parseVotingState(rawUserState?.voting_state_json) || createVotingState([]));
+
+  const stateChoices = [...state.currentChoices].sort((left, right) => left - right);
+  const requestChoices = [...choiceIds].sort((left, right) => left - right);
+  if (JSON.stringify(stateChoices) !== JSON.stringify(requestChoices)) {
+    return res.status(409).render("error", {
+      title: "Голосование изменилось",
+      message: "Обновите страницу и попробуйте снова.",
+    });
+  }
+
+  const voteTimestamp = nowIso();
+  const recordedLoserId = choiceIds.find((id) => id !== winnerId) || winnerId;
+  db.prepare(`
+    INSERT INTO votes (
+      poll_id,
+      voter_user_id,
+      winner_participant_id,
+      loser_participant_id,
+      ip_address,
+      user_agent,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    pollId,
+    userId,
+    winnerId,
+    recordedLoserId,
+    req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
+    req.headers["user-agent"] || "",
+    voteTimestamp,
+  );
+
+  state.currentChoices = [];
+  const nextState = ensureCurrentChoices(state);
+
+  if (nextState.currentChoices.length === 0 && nextState.remainingIds.length === 0) {
+    db.prepare(`
+      UPDATE user_poll_progress
+      SET voting_state_json = NULL, completed_at = ?, final_winner_participant_id = NULL, updated_at = ?
+      WHERE user_id = ? AND poll_id = ?
+    `).run(voteTimestamp, voteTimestamp, userId, pollId);
+
+    return res.redirect(`/polls/${pollSlug || poll.slug}/thanks`);
+  } else {
+    db.prepare("UPDATE user_poll_progress SET voting_state_json = ?, updated_at = ? WHERE user_id = ? AND poll_id = ?").run(
+      JSON.stringify({
+        ...nextState,
+        stepNumber: Number(nextState.stepNumber || 1) + 1,
+      }),
+      voteTimestamp,
+      userId,
+      pollId,
+    );
+  }
+
+  res.redirect(`/polls/${pollSlug || poll.slug}`);
+});
+
+app.get("/admin/login", (req, res) => {
+  res.render("admin-login", { error: null });
+});
+
+app.post("/admin/login", (req, res) => {
+  const { username, password } = req.body;
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    req.session.isAdmin = true;
+    return res.redirect("/admin");
+  }
+
+  res.status(401).render("admin-login", {
+    error: "Неверный логин или пароль.",
+  });
+});
+
+app.post("/admin/logout", ensureAdmin, (req, res) => {
+  req.session.isAdmin = false;
+  res.redirect("/admin/login");
+});
+
+app.get("/admin", ensureAdmin, (req, res) => {
+  res.render("admin-dashboard", {
+    ...adminStats(),
+    formatDate,
+    baseUrl: BASE_URL,
+  });
+});
+
+app.post("/admin/polls", ensureAdmin, (req, res) => {
+  const title = String(req.body.title || "").trim();
+  const slugInput = String(req.body.slug || "").trim();
+  const description = String(req.body.description || "").trim();
+  const redirectUrl = String(req.body.redirect_url || "").trim() || "https://dsipsmule.one";
+  const slug = slugify(slugInput || title);
+
+  if (!title || !slug) {
+    return res.redirect("/admin");
+  }
+
+  const existing = db.prepare("SELECT id FROM polls WHERE slug = ?").get(slug);
+  if (existing) {
+    return res.redirect("/admin");
+  }
+
+  const timestamp = nowIso();
+  db.prepare(`
+    INSERT INTO polls (title, slug, description, redirect_url, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 1, ?, ?)
+  `).run(title, slug, description, redirectUrl, timestamp, timestamp);
+
+  res.redirect("/admin");
+});
+
+app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
+  const pollId = Number(req.params.id);
+  const poll = db.prepare("SELECT id FROM polls WHERE id = ?").get(pollId);
+
+  if (!poll) {
+    return res.redirect("/admin");
+  }
+
+  const deletePollTx = db.transaction(() => {
+    db.prepare("DELETE FROM votes WHERE poll_id = ?").run(pollId);
+    db.prepare("DELETE FROM user_poll_progress WHERE poll_id = ?").run(pollId);
+    db.prepare("DELETE FROM participants WHERE poll_id = ?").run(pollId);
+    db.prepare("DELETE FROM polls WHERE id = ?").run(pollId);
+  });
+
+  deletePollTx();
+  res.redirect("/admin");
+});
+
+app.post("/admin/participants", ensureAdmin, (req, res) => {
+  const pollId = Number(req.body.poll_id);
+  const name = String(req.body.name || "").trim();
+  const embedHtml = String(req.body.embed_html || "").trim();
+
+  if (!pollId || !name || !embedHtml) {
+    return res.redirect("/admin");
+  }
+
+  const timestamp = nowIso();
+  db.prepare(`
+    INSERT INTO participants (poll_id, name, description, image_url, embed_html, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(pollId, name, "", "", embedHtml, timestamp, timestamp);
+
+  res.redirect("/admin");
+});
+
+app.post("/admin/participants/:id/update", ensureAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const name = String(req.body.name || "").trim();
+  const embedHtml = String(req.body.embed_html || "").trim();
+
+  const participant = db
+    .prepare("SELECT id FROM participants WHERE id = ?")
+    .get(id);
+
+  if (!participant || !name || !embedHtml) {
+    return res.redirect("/admin");
+  }
+
+  db.prepare(`
+    UPDATE participants
+    SET name = ?, embed_html = ?, updated_at = ?
+    WHERE id = ?
+  `).run(name, embedHtml, nowIso(), id);
+
+  res.redirect("/admin");
+});
+
+app.post("/admin/participants/:id/toggle", ensureAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const participant = db
+    .prepare("SELECT id, is_active FROM participants WHERE id = ?")
+    .get(id);
+
+  if (!participant) {
+    return res.redirect("/admin");
+  }
+
+  db.prepare("UPDATE participants SET is_active = ?, updated_at = ? WHERE id = ?").run(
+    participant.is_active ? 0 : 1,
+    nowIso(),
+    id,
+  );
+
+  res.redirect("/admin");
+});
+
+app.post("/admin/participants/:id/delete", ensureAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const participant = db
+    .prepare("SELECT id, poll_id FROM participants WHERE id = ?")
+    .get(id);
+
+  if (!participant) {
+    return res.redirect("/admin");
+  }
+
+  const deleteParticipantTx = db.transaction(() => {
+    db.prepare(`
+      DELETE FROM votes
+      WHERE winner_participant_id = ? OR loser_participant_id = ?
+    `).run(id, id);
+
+    db.prepare("DELETE FROM user_poll_progress WHERE poll_id = ?").run(participant.poll_id);
+    db.prepare("DELETE FROM participants WHERE id = ?").run(id);
+  });
+
+  deleteParticipantTx();
+  res.redirect("/admin");
+});
+
+app.post("/admin/users/:id/reset-votes", ensureAdmin, (req, res) => {
+  const userId = Number(req.params.id);
+  const user = db.prepare("SELECT id FROM telegram_users WHERE id = ?").get(userId);
+
+  if (!user) {
+    return res.redirect("/admin");
+  }
+
+  const resetVotesTx = db.transaction(() => {
+    db.prepare("DELETE FROM votes WHERE voter_user_id = ?").run(userId);
+    db.prepare("DELETE FROM user_poll_progress WHERE user_id = ?").run(userId);
+  });
+
+  resetVotesTx();
+  res.redirect("/admin");
+});
+
+app.use((req, res) => {
+  res.status(404).render("error", {
+    title: "Страница не найдена",
+    message: "Проверьте адрес или вернитесь на главную.",
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Voting service listening on ${BASE_URL}`);
+});

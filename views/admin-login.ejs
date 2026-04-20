@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Админ вход</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell shell-narrow">
+      <section class="panel">
+        <span class="eyebrow">Админка</span>
+        <h1>Вход в панель управления</h1>
+        <p>Используйте логин и пароль из `.env`.</p>
+        <% if (error) { %>
+          <div class="notice notice-error"><%= error %></div>
+        <% } %>
+        <form class="stack-form" method="post" action="/admin/login">
+          <label>
+            <span>Логин</span>
+            <input type="text" name="username" required />
+          </label>
+          <label>
+            <span>Пароль</span>
+            <input type="password" name="password" required />
+          </label>
+          <button class="primary-button" type="submit">Войти</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

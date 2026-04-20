@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Голосование</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Мини-сервис голосования</span>
+          <h1><%= poll.title %></h1>
+          <p>
+            <%= poll.description || "Выберите сильнейшего участника в этом этапе." %>
+          </p>
+
+          <% if (telegramStatus) { %>
+            <div class="notice"><%= telegramStatus %></div>
+          <% } %>
+
+          <% if (currentUser) { %>
+            <div class="user-chip">
+              <% if (currentUser.photo_url) { %>
+                <img src="<%= currentUser.photo_url %>" alt="<%= currentUser.full_name %>" />
+              <% } %>
+              <div>
+                <strong><%= currentUser.full_name %></strong>
+                <span><%= currentUser.username ? `@${currentUser.username}` : "без username" %></span>
+              </div>
+            </div>
+            <form method="post" action="/auth/logout">
+              <button class="ghost-button" type="submit">Выйти</button>
+            </form>
+          <% } else { %>
+            <% if (telegramConfigured) { %>
+              <div class="widget-wrap">
+                <script
+                  async
+                  src="https://telegram.org/js/telegram-widget.js?23"
+                  data-telegram-login="<%= telegramBotUsername %>"
+                  data-size="large"
+                  data-userpic="false"
+                  data-auth-url="<%= telegramAuthUrl %>"
+                ></script>
+              </div>
+            <% } else { %>
+              <div class="notice">
+                Telegram вход пока не настроен. Заполните `.env` и свяжите домен
+                через `/setdomain` в BotFather.
+              </div>
+            <% } %>
+          <% } %>
+        </div>
+
+        <% if (currentUser && votingProgress && votingProgress.status === "active") { %>
+          <div class="notice">
+            Раунд <%= votingProgress.roundNumber %>. Выберите
+            <%= votingProgress.stageType === "triple" ? "одного из трех" : "одного из двух" %>.
+          </div>
+          <section class="duel <%= votingProgress.stageType === 'triple' ? 'duel-triple' : '' %>">
+            <% votingProgress.participants.forEach((participant, index) => { %>
+              <article class="contestant">
+                <div class="contestant-media">
+                  <% if (participant.embed_html) { %>
+                    <div class="smule-embed"><%- participant.embed_html %></div>
+                  <% } else { %>
+                    <div class="notice">Smule embed не добавлен.</div>
+                  <% } %>
+                </div>
+                <div class="contestant-copy">
+                  <h2><%= participant.name %></h2>
+                </div>
+                <form method="post" action="/vote">
+                  <input type="hidden" name="poll_id" value="<%= poll.id %>" />
+                  <input type="hidden" name="poll_slug" value="<%= poll.slug %>" />
+                  <input type="hidden" name="winner_id" value="<%= participant.id %>" />
+                  <button class="vote-button" type="submit">Голосовать</button>
+                </form>
+              </article>
+              <% if (votingProgress.stageType !== "triple" && index === 0) { %>
+                <div class="versus">VS</div>
+              <% } %>
+            <% }) %>
+          </section>
+        <% } else if (currentUser && votingProgress && votingProgress.status === "completed") { %>
+          <div class="notice">
+            Вы уже завершили голосование.
+          </div>
+          <a class="primary-button" href="/polls/<%= poll.slug %>/thanks">Продолжить</a>
+        <% } else if (currentUser) { %>
+          <div class="notice">
+            Для старта добавьте минимум двух активных участников через админку.
+          </div>
+        <% } %>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Этапы голосования</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Manrope:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Голосования</span>
+          <h1>Выберите этап.</h1>
+          <p>У каждого этапа свои участники, своя ссылка и отдельное прохождение.</p>
+          <% if (!currentUser && telegramConfigured) { %>
+            <div class="widget-wrap">
+              <script
+                async
+                src="https://telegram.org/js/telegram-widget.js?23"
+                data-telegram-login="<%= telegramBotUsername %>"
+                data-size="large"
+                data-userpic="false"
+                data-auth-url="<%= telegramAuthUrl %>"
+              ></script>
+            </div>
+          <% } %>
+        </div>
+
+        <section class="cards-grid">
+          <% polls.filter((poll) => poll.is_active).forEach((poll) => { %>
+            <article class="mini-card">
+              <div>
+                <strong><%= poll.title %></strong>
+                <p><%= poll.description || "Описание пока не добавлено." %></p>
+                <span>/polls/<%= poll.slug %></span>
+              </div>
+              <a class="primary-button" href="/polls/<%= poll.slug %>">Открыть этап</a>
+            </article>
+          <% }) %>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

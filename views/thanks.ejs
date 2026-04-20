@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Спасибо</title>
+    <meta http-equiv="refresh" content="4;url=<%= redirectUrl %>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Manrope:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell shell-narrow">
+      <section class="panel thanks-panel">
+        <span class="eyebrow">Голос принят</span>
+        <h1>Спасибо, все успешно.</h1>
+        <p>
+          Ваш голос записан. Через несколько секунд мы перенаправим вас на
+          основной сайт.
+        </p>
+        <a class="primary-button" href="<%= redirectUrl %>">Перейти сейчас</a>
+      </section>
+    </main>
+  </body>
+</html>
