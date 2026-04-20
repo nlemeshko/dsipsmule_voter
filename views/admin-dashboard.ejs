@@ -185,7 +185,7 @@
                           <td><%= participant.is_active ? "Активен" : "Отключен" %></td>
                           <td class="payload-cell">
                             <% if (participant.embed_html) { %>
-                              <div class="mini-embed"><%- participant.embed_html %></div>
+                              <div class="mini-embed mini-embed-compact"><%- participant.embed_html %></div>
                             <% } else { %>
                               <div class="notice">Smule embed не добавлен.</div>
                             <% } %>
