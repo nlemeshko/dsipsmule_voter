@@ -450,6 +450,77 @@ function getVotingProgress(userId, pollId) {
   };
 }
 
+function getPollReportData(pollId) {
+  const poll = db
+    .prepare(`
+      SELECT id, title, slug, description, redirect_url, is_active, created_at, updated_at
+      FROM polls
+      WHERE id = ?
+    `)
+    .get(pollId);
+
+  if (!poll) {
+    return null;
+  }
+
+  const participants = db
+    .prepare(`
+      SELECT id, name, embed_html, is_active, created_at, updated_at
+      FROM participants
+      WHERE poll_id = ?
+      ORDER BY created_at ASC, id ASC
+    `)
+    .all(pollId);
+
+  const voteRows = db
+    .prepare(`
+      SELECT
+        v.id,
+        v.winner_participant_id,
+        v.loser_participant_id,
+        v.created_at,
+        tu.telegram_id,
+        tu.full_name,
+        tu.username,
+        tu.photo_url,
+        loser.name AS loser_name
+      FROM votes v
+      JOIN telegram_users tu ON tu.id = v.voter_user_id
+      JOIN participants loser ON loser.id = v.loser_participant_id
+      WHERE v.poll_id = ?
+      ORDER BY v.created_at DESC
+    `)
+    .all(pollId);
+
+  const votesByWinnerId = new Map();
+  voteRows.forEach((row) => {
+    const current = votesByWinnerId.get(row.winner_participant_id) || [];
+    current.push(row);
+    votesByWinnerId.set(row.winner_participant_id, current);
+  });
+
+  const participantsWithVotes = participants.map((participant) => {
+    const voteDetails = votesByWinnerId.get(participant.id) || [];
+    return {
+      ...participant,
+      voteCount: voteDetails.length,
+      uniqueVoterCount: new Set(voteDetails.map((vote) => vote.telegram_id)).size,
+      voteDetails,
+    };
+  });
+
+  return {
+    poll,
+    totals: {
+      participants: participantsWithVotes.length,
+      votes: voteRows.length,
+      voters: new Set(voteRows.map((vote) => vote.telegram_id)).size,
+    },
+    participants: participantsWithVotes.sort((left, right) => right.voteCount - left.voteCount || left.name.localeCompare(right.name, "ru")),
+    recentVotes: voteRows.slice(0, 100),
+  };
+}
+
 function adminStats() {
   const totals = {
     polls: db.prepare("SELECT COUNT(*) AS count FROM polls").get().count,
@@ -529,54 +600,15 @@ function adminStats() {
     .all();
 
   const polls = getPolls();
-  const participantVoteRows = db
-    .prepare(`
-      SELECT
-        v.id,
-        v.poll_id,
-        v.winner_participant_id,
-        v.loser_participant_id,
-        v.created_at,
-        tu.telegram_id,
-        tu.full_name,
-        tu.username,
-        loser.name AS loser_name
-      FROM votes v
-      JOIN telegram_users tu ON tu.id = v.voter_user_id
-      JOIN participants loser ON loser.id = v.loser_participant_id
-      ORDER BY v.created_at DESC
-    `)
-    .all();
-
-  const votesByWinnerId = new Map();
-  participantVoteRows.forEach((row) => {
-    const current = votesByWinnerId.get(row.winner_participant_id) || [];
-    current.push(row);
-    votesByWinnerId.set(row.winner_participant_id, current);
-  });
-
   const pollsWithParticipants = polls.map((poll) => {
-    const pollParticipants = participants
-      .filter((participant) => participant.poll_id === poll.id)
-      .map((participant) => {
-        const voteDetails = votesByWinnerId.get(participant.id) || [];
-        return {
-          ...participant,
-          voteCount: voteDetails.length,
-          voteDetails,
-        };
-      });
-
-    const pollVoteCount = pollParticipants.reduce((sum, participant) => sum + participant.voteCount, 0);
-    const uniqueVoterCount = new Set(
-      pollParticipants.flatMap((participant) => participant.voteDetails.map((vote) => vote.telegram_id)),
-    ).size;
+    const report = getPollReportData(poll.id);
+    const pollParticipants = report?.participants || [];
 
     return {
       ...poll,
       participantCount: pollParticipants.length,
-      voteCount: pollVoteCount,
-      uniqueVoterCount,
+      voteCount: report?.totals.votes || 0,
+      uniqueVoterCount: report?.totals.voters || 0,
       participants: pollParticipants,
     };
   });
@@ -802,6 +834,30 @@ app.get("/polls/:slug/thanks", (req, res) => {
 
   res.render("thanks", {
     redirectUrl: poll.redirect_url || "https://dsipsmule.one",
+  });
+});
+
+app.get("/polls/:slug/report", (req, res) => {
+  const poll = getPollBySlug(req.params.slug);
+  if (!poll) {
+    return res.status(404).render("error", {
+      title: "Отчет не найден",
+      message: "Проверьте ссылку на отчет.",
+    });
+  }
+
+  if (poll.is_active && !req.session.isAdmin) {
+    return res.status(403).render("error", {
+      title: "Отчет пока закрыт",
+      message: "Отчет станет доступен всем после закрытия этапа голосования.",
+    });
+  }
+
+  const report = getPollReportData(poll.id);
+  res.render("report", {
+    poll,
+    report,
+    formatDate,
   });
 });
 
@@ -1032,6 +1088,25 @@ app.post("/admin/polls", ensureAdmin, (req, res) => {
     INSERT INTO polls (title, slug, description, redirect_url, is_active, created_at, updated_at)
     VALUES (?, ?, ?, ?, 1, ?, ?)
   `).run(title, slug, description, redirectUrl, timestamp, timestamp);
+
+  res.redirect("/admin");
+});
+
+app.post("/admin/polls/:id/toggle", ensureAdmin, (req, res) => {
+  const pollId = Number(req.params.id);
+  const poll = db
+    .prepare("SELECT id, is_active FROM polls WHERE id = ?")
+    .get(pollId);
+
+  if (!poll) {
+    return res.redirect("/admin");
+  }
+
+  db.prepare("UPDATE polls SET is_active = ?, updated_at = ? WHERE id = ?").run(
+    poll.is_active ? 0 : 1,
+    nowIso(),
+    pollId,
+  );
 
   res.redirect("/admin");
 });

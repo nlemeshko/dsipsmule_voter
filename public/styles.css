@@ -22,7 +22,7 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--ink);
-  font-family: "Manrope", sans-serif;
+  font-family: "Amatic SC", cursive;
   background:
     radial-gradient(circle at top, rgba(180, 35, 35, 0.22), transparent 26%),
     radial-gradient(circle at 20% 20%, rgba(202, 184, 146, 0.08), transparent 20%),
@@ -44,6 +44,22 @@ body::before {
       transparent 50px
     );
   opacity: 0.3;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: auto auto 8% 6%;
+  width: 32vw;
+  height: 32vw;
+  max-width: 420px;
+  max-height: 420px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(180, 35, 35, 0.18), transparent 68%);
+  filter: blur(26px);
+  opacity: 0.45;
+  animation: emberFloat 16s ease-in-out infinite;
 }
 
 a {
@@ -76,6 +92,10 @@ textarea {
   padding-top: 80px;
 }
 
+.shell > * {
+  animation: riseIn 0.7s ease both;
+}
+
 .hero,
 .panel,
 .stat-card,
@@ -97,6 +117,20 @@ textarea {
   gap: 28px;
   position: relative;
   overflow: hidden;
+  isolation: isolate;
+}
+
+.hero::before,
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: -20% auto auto -10%;
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, rgba(202, 184, 146, 0.08), transparent 72%);
+  pointer-events: none;
+  filter: blur(10px);
+  z-index: 0;
 }
 
 .hero::after,
@@ -114,7 +148,7 @@ textarea {
 .panel h1,
 .panel h2 {
   margin: 0 0 12px;
-  font-family: "Cinzel", serif;
+  font-family: "Amatic SC", cursive;
   letter-spacing: 0.03em;
 }
 
@@ -123,6 +157,7 @@ textarea {
   line-height: 0.94;
   max-width: 12ch;
   text-transform: uppercase;
+  text-shadow: 0 0 24px rgba(180, 35, 35, 0.18);
 }
 
 .hero-copy p,
@@ -158,7 +193,11 @@ textarea {
   border-radius: 18px;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .primary-button,
@@ -169,6 +208,7 @@ textarea {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  box-shadow: 0 12px 26px rgba(126, 19, 19, 0.28);
 }
 
 .ghost-button {
@@ -186,7 +226,20 @@ textarea {
 .primary-button:hover,
 .ghost-button:hover,
 .vote-button:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+}
+
+.primary-button:focus-visible,
+.ghost-button:focus-visible,
+.vote-button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.poll-group-summary:focus-visible {
+  outline: none;
+  border-color: rgba(202, 184, 146, 0.55);
+  box-shadow: 0 0 0 3px rgba(202, 184, 146, 0.14);
 }
 
 .duel {
@@ -205,6 +258,37 @@ textarea {
   overflow: hidden;
   border: 1px solid var(--line-strong);
   background: linear-gradient(180deg, rgba(18, 17, 16, 0.98), rgba(10, 10, 10, 0.96));
+  position: relative;
+  transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+}
+
+.contestant::after,
+.mini-card::after,
+.poll-group::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(202, 184, 146, 0.08), transparent 35%, transparent 70%, rgba(180, 35, 35, 0.08));
+  opacity: 0;
+  transition: opacity 0.24s ease;
+}
+
+.contestant:hover,
+.mini-card:hover,
+.poll-group[open] {
+  border-color: rgba(202, 184, 146, 0.32);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+}
+
+.contestant:hover {
+  transform: translateY(-4px);
+}
+
+.contestant:hover::after,
+.mini-card:hover::after,
+.poll-group[open]::after {
+  opacity: 1;
 }
 
 .contestant-media {
@@ -228,8 +312,9 @@ textarea {
 
 .contestant-copy h2 {
   margin: 0;
-  font-family: "Cinzel", serif;
+  font-family: "Amatic SC", cursive;
   font-size: 1.7rem;
+  word-break: break-word;
 }
 
 .contestant form {
@@ -251,7 +336,7 @@ textarea {
   border: 1px solid rgba(202, 184, 146, 0.25);
   background: radial-gradient(circle, rgba(180, 35, 35, 0.25), rgba(0, 0, 0, 0.75));
   color: var(--steel);
-  font-family: "Cinzel", serif;
+  font-family: "Amatic SC", cursive;
   font-size: 1.2rem;
   font-weight: 700;
 }
@@ -262,6 +347,7 @@ textarea {
   border-radius: 22px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 0 0 1px rgba(202, 184, 146, 0.04);
 }
 
 .user-chip {
@@ -294,6 +380,7 @@ textarea {
   border: 1px solid rgba(202, 184, 146, 0.12);
   background: rgba(202, 184, 146, 0.06);
   color: var(--success);
+  backdrop-filter: blur(8px);
 }
 
 .notice-error {
@@ -346,7 +433,7 @@ textarea {
 
 .stat-card strong {
   font-size: 2.1rem;
-  font-family: "Cinzel", serif;
+  font-family: "Amatic SC", cursive;
   color: var(--steel);
 }
 
@@ -369,6 +456,7 @@ textarea {
   padding: 14px 16px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--ink);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 textarea {
@@ -377,6 +465,8 @@ textarea {
 
 .table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 20px;
 }
 
 .poll-groups {
@@ -389,6 +479,8 @@ textarea {
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.02);
   overflow: hidden;
+  position: relative;
+  transition: border-color 0.22s ease, box-shadow 0.22s ease;
 }
 
 .poll-group-summary {
@@ -399,6 +491,8 @@ textarea {
   padding: 18px 20px;
   cursor: pointer;
   list-style: none;
+  position: relative;
+  z-index: 1;
 }
 
 .poll-group-summary::-webkit-details-marker {
@@ -412,6 +506,7 @@ textarea {
 
 .poll-group-summary span {
   color: var(--muted);
+  word-break: break-word;
 }
 
 .poll-group-meta {
@@ -428,9 +523,41 @@ textarea {
   background: rgba(202, 184, 146, 0.05);
 }
 
+.report-participant-body {
+  display: grid;
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+
+.report-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.report-user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex: 0 0 34px;
+  object-fit: cover;
+  border: 1px solid rgba(202, 184, 146, 0.22);
+  box-shadow: 0 0 0 3px rgba(202, 184, 146, 0.06);
+}
+
+.report-user-fallback {
+  display: inline-grid;
+  place-items: center;
+  background: linear-gradient(180deg, rgba(202, 184, 146, 0.18), rgba(180, 35, 35, 0.16));
+  color: var(--ink);
+  font-weight: 700;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 720px;
 }
 
 th,
@@ -439,6 +566,14 @@ td {
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
+}
+
+tbody tr {
+  transition: background 0.18s ease;
+}
+
+tbody tr:hover {
+  background: rgba(202, 184, 146, 0.04);
 }
 
 th {
@@ -512,6 +647,9 @@ th {
   flex-direction: column;
   justify-content: space-between;
   gap: 14px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
 }
 
 .mini-card span {
@@ -521,6 +659,8 @@ th {
 .smule-embed,
 .mini-embed {
   width: 100%;
+  overflow: hidden;
+  border-radius: 18px;
 }
 
 .smule-embed iframe,
@@ -528,6 +668,7 @@ th {
   display: block;
   width: 100%;
   border: 0;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .smule-embed {
@@ -551,6 +692,45 @@ th {
   font-size: clamp(2rem, 3vw, 3rem);
 }
 
+.site-footer {
+  margin-top: 18px;
+  padding: 12px 8px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.site-footer a {
+  color: var(--steel);
+}
+
+.site-footer a:hover {
+  color: #f1ead7;
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes emberFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(18px, -14px, 0) scale(1.08);
+  }
+}
+
 @media (max-width: 860px) {
   .duel,
   .duel-triple,
@@ -570,6 +750,15 @@ th {
     align-items: flex-start;
   }
 
+  .hero,
+  .panel {
+    padding: 22px;
+  }
+
+  .hero-copy h1 {
+    max-width: none;
+  }
+
   .poll-group-summary {
     flex-direction: column;
     align-items: flex-start;
@@ -577,5 +766,32 @@ th {
 
   .poll-group-meta {
     justify-content: flex-start;
+  }
+
+  table {
+    min-width: 640px;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    width: min(100% - 20px, 1240px);
+    padding-top: 20px;
+    padding-bottom: 38px;
+  }
+
+  .contestant-copy {
+    padding: 18px 18px 8px;
+  }
+
+  .contestant form,
+  .smule-embed {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .site-footer {
+    font-size: 0.82rem;
+    line-height: 1.6;
   }
 }
