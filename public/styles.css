@@ -689,6 +689,14 @@ textarea {
   background: rgba(202, 184, 146, 0.05);
 }
 
+.status-open {
+  color: #c9d8e8;
+}
+
+.status-closed {
+  color: #ef9a9a !important;
+}
+
 .report-participant-body {
   display: grid;
   gap: 16px;
@@ -967,8 +975,34 @@ td {
   position: relative;
   width: min(240px, 100%);
   aspect-ratio: 1;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.report-chart-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+
+.report-chart-track,
+.report-chart-segment {
+  fill: none;
+  stroke-width: 16;
+}
+
+.report-chart-track {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.report-chart-segment {
+  stroke-linecap: butt;
+  transition: stroke-width 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+.report-chart-segment:hover {
+  stroke-width: 18;
+  filter: brightness(1.12);
 }
 
 .report-chart::after {

@@ -37,7 +37,7 @@
           <h1><%= poll.title %></h1>
           <p><%= poll.description || "Подробная статистика завершенного голосования." %></p>
           <div class="poll-group-meta">
-            <span>Статус: <%= poll.is_active ? "Открыт" : "Закрыт" %></span>
+            <span class="<%= poll.is_active ? 'status-open' : 'status-closed' %>">Статус: <%= poll.is_active ? "Открыт" : "Закрыт" %></span>
             <span>Участников: <%= report.totals.participants %></span>
             <span>Голосов: <%= report.totals.votes %></span>
             <span>Людей: <%= report.totals.voters %></span>
@@ -113,30 +113,44 @@
       <% 
         const chartColors = ["#8fa8c1", "#c5d3e1", "#6e86a0", "#d9c39a", "#8bb6a6", "#b991c8", "#86a9b6", "#d28787"];
         const chartParticipants = report.participants.filter((participant) => participant.voteCount > 0);
+        const chartRadius = 42;
+        const chartCircumference = 2 * Math.PI * chartRadius;
         let chartOffset = 0;
         const chartSlices = chartParticipants.map((participant, index) => {
           const percent = report.totals.votes ? (participant.voteCount / report.totals.votes) * 100 : 0;
-          const start = chartOffset;
-          chartOffset += percent;
+          const dash = (percent / 100) * chartCircumference;
+          const offset = chartOffset;
+          chartOffset += dash;
           return {
             ...participant,
             color: chartColors[index % chartColors.length],
             percent,
-            start,
-            end: chartOffset,
+            dash,
+            offset,
           };
         });
-        const chartBackground = chartSlices.length
-          ? `conic-gradient(${chartSlices
-              .map((slice) => `${slice.color} ${slice.start.toFixed(2)}% ${slice.end.toFixed(2)}%`)
-              .join(", ")})`
-          : "conic-gradient(rgba(255,255,255,0.08) 0 100%)";
       %>
       <section class="panel">
         <h2>Распределение голосов</h2>
         <div class="report-chart-layout">
           <div class="report-chart-card">
-            <div class="report-chart" style="background: <%- chartBackground %>;">
+            <div class="report-chart">
+              <svg class="report-chart-svg" viewBox="0 0 100 100" aria-label="Распределение голосов">
+                <circle class="report-chart-track" cx="50" cy="50" r="42"></circle>
+                <% chartSlices.forEach((slice) => { %>
+                  <circle
+                    class="report-chart-segment"
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    stroke="<%= slice.color %>"
+                    stroke-dasharray="<%= slice.dash %> <%= chartCircumference - slice.dash %>"
+                    stroke-dashoffset="<%= -slice.offset %>"
+                  >
+                    <title><%= slice.name %> — <%= slice.voteCount %> голосов (<%= slice.percent.toFixed(1) %>%)</title>
+                  </circle>
+                <% }) %>
+              </svg>
               <div class="report-chart-center">
                 <strong><%= report.totals.votes %></strong>
                 <span>голосов</span>
