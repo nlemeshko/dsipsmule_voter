@@ -432,6 +432,8 @@ textarea:focus-visible,
   background:
     radial-gradient(circle at top, rgba(111, 135, 158, 0.15), transparent 34%),
     linear-gradient(180deg, #17222d, #0d141d);
+  display: flex;
+  align-items: center;
 }
 
 .contestant img {
@@ -457,6 +459,7 @@ textarea:focus-visible,
 .contestant form {
   padding: 22px;
   padding-top: 18px;
+  margin-top: auto;
 }
 
 .vote-button {
@@ -915,12 +918,38 @@ td {
 
 .contestant .smule-embed {
   padding: 18px 22px;
+  width: 100%;
 }
 
 .contestant .smule-embed iframe {
   width: 100% !important;
   min-height: 330px;
   max-height: 430px;
+}
+
+.duel-triple .contestant {
+  min-height: 100%;
+}
+
+.duel-triple .contestant-media {
+  min-height: 360px;
+  padding: 18px 22px;
+}
+
+.duel-triple .contestant .smule-embed {
+  padding: 0;
+}
+
+.duel-triple .contestant .smule-embed iframe {
+  height: 320px !important;
+  min-height: 320px;
+  max-height: 320px;
+}
+
+.duel-triple .contestant-copy {
+  min-height: 132px;
+  display: flex;
+  align-items: flex-start;
 }
 
 .mini-embed {
@@ -1223,6 +1252,26 @@ td {
   .contestant-media {
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
+  }
+
+  .duel-triple .contestant-media {
+    min-height: 220px;
+    padding: 0;
+  }
+
+  .duel-triple .contestant .smule-embed {
+    padding: 18px 22px;
+  }
+
+  .duel-triple .contestant .smule-embed iframe {
+    height: auto !important;
+    min-height: 280px;
+    max-height: 360px;
+  }
+
+  .duel-triple .contestant-copy {
+    min-height: 0;
+    display: block;
   }
 
   .poll-group-summary {
