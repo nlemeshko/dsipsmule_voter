@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>dsipsmule.one - NASSAL2026 - Голосование</title>
+    <title>Голосование - dsipsmule.one | NASSAL2026</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -69,7 +69,7 @@
                       <div class="notice">За этого участника не было голосов.</div>
                     <% } else { %>
                       <div class="table-wrap">
-                        <table>
+                        <table class="report-table">
                           <thead>
                             <tr>
                               <th>Когда</th>
@@ -82,9 +82,9 @@
                           <tbody>
                             <% participant.voteDetails.forEach((vote) => { %>
                               <tr>
-                                <td><%= formatDate(vote.created_at) %></td>
-                                <td><%= vote.telegram_id %></td>
-                                <td>
+                                <td data-label="Когда"><%= formatDate(vote.created_at) %></td>
+                                <td data-label="Telegram ID"><%= vote.telegram_id %></td>
+                                <td data-label="Пользователь">
                                   <div class="report-user">
                                     <% if (vote.photo_url) { %>
                                       <img class="report-user-avatar" src="<%= vote.photo_url %>" alt="<%= vote.full_name || vote.telegram_id %>" />
@@ -94,8 +94,8 @@
                                     <span><%= vote.full_name || "—" %></span>
                                   </div>
                                 </td>
-                                <td><%= vote.username ? `@${vote.username}` : "—" %></td>
-                                <td><%= vote.loser_name || "—" %></td>
+                                <td data-label="Username"><%= vote.username ? `@${vote.username}` : "—" %></td>
+                                <td data-label="Против кого"><%= vote.loser_name || "—" %></td>
                               </tr>
                             <% }) %>
                           </tbody>
@@ -113,7 +113,7 @@
       <section class="panel">
         <h2>Последние голоса этапа</h2>
         <div class="table-wrap">
-          <table>
+          <table class="report-table">
             <thead>
               <tr>
                 <th>Когда</th>
@@ -126,9 +126,9 @@
             <tbody>
               <% report.recentVotes.forEach((vote) => { %>
                 <tr>
-                  <td><%= formatDate(vote.created_at) %></td>
-                  <td><%= vote.telegram_id %></td>
-                  <td>
+                  <td data-label="Когда"><%= formatDate(vote.created_at) %></td>
+                  <td data-label="Telegram ID"><%= vote.telegram_id %></td>
+                  <td data-label="Пользователь">
                     <div class="report-user">
                       <% if (vote.photo_url) { %>
                         <img class="report-user-avatar" src="<%= vote.photo_url %>" alt="<%= vote.full_name || vote.telegram_id %>" />
@@ -138,8 +138,8 @@
                       <span><%= vote.full_name || "—" %></span>
                     </div>
                   </td>
-                  <td><%= vote.username ? `@${vote.username}` : "—" %></td>
-                  <td><%= vote.loser_name || "—" %></td>
+                  <td data-label="Username"><%= vote.username ? `@${vote.username}` : "—" %></td>
+                  <td data-label="Против кого"><%= vote.loser_name || "—" %></td>
                 </tr>
               <% }) %>
             </tbody>

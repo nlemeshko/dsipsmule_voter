@@ -1060,6 +1060,68 @@ td {
     font-size: 1.3rem;
   }
 
+  .poll-group-meta {
+    gap: 8px;
+  }
+
+  .poll-group-meta span {
+    font-size: 1rem;
+  }
+
+  .report-participant-body {
+    padding: 0 14px 14px;
+  }
+
+  .report-participant-layout {
+    gap: 14px;
+  }
+
+  .mini-embed-compact {
+    max-width: 100%;
+  }
+
+  .report-table {
+    min-width: 0;
+  }
+
+  .report-table thead {
+    display: none;
+  }
+
+  .report-table tbody,
+  .report-table tr,
+  .report-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .report-table tr {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .report-table td {
+    border-bottom: 0;
+    padding: 8px 0;
+  }
+
+  .report-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 0.96rem;
+  }
+
+  .report-user {
+    width: 100%;
+  }
+
+  .report-user span:last-child {
+    max-width: none;
+    white-space: normal;
+  }
+
   .contestant-copy {
     padding: 18px 18px 8px;
   }

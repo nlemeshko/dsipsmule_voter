@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>dsipsmule.one - NASSAL2026 - Голосование</title>
+    <title>Голосование - dsipsmule.one | NASSAL2026</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -18,7 +18,7 @@
         <nav class="site-brand-nav" aria-label="Основная навигация">
           <a href="https://dsipsmule.one" target="_blank" rel="noreferrer">Главная</a>
           <a href="/">Голосование</a>
-          <a href="https://dsipsmule.one" target="_blank" rel="noreferrer">Записи</a>
+          <a href="https://dsipsmule.one" target="_blank" rel="noreferrer">Правила</a>
         </nav>
         <img
           class="site-brand-logo"
@@ -51,13 +51,18 @@
         </div>
 
         <section class="cards-grid">
-          <% polls.filter((poll) => poll.is_active).forEach((poll) => { %>
+          <% polls.forEach((poll) => { %>
             <article class="mini-card">
               <div>
                 <strong><%= poll.title %></strong>
                 <p><%= poll.description || "Описание пока не добавлено." %></p>
+                <span><%= poll.is_active ? "Статус: Открыт" : "Статус: Закрыт" %></span>
               </div>
-              <a class="primary-button" href="/polls/<%= poll.slug %>">Открыть этап</a>
+              <% if (poll.is_active) { %>
+                <a class="primary-button" href="/polls/<%= poll.slug %>">Открыть этап</a>
+              <% } else { %>
+                <a class="ghost-button" href="/polls/<%= poll.slug %>/report">Открыть отчет</a>
+              <% } %>
             </article>
           <% }) %>
         </section>

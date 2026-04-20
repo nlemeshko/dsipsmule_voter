@@ -337,6 +337,19 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function sanitizeReturnPath(value) {
+  const pathValue = String(value || "").trim();
+  if (!pathValue.startsWith("/") || pathValue.startsWith("//")) {
+    return "/";
+  }
+  return pathValue;
+}
+
+function buildTelegramAuthUrl(returnToPath = "/") {
+  const safeReturnPath = sanitizeReturnPath(returnToPath);
+  return `${BASE_URL}/auth/telegram/widget?next=${encodeURIComponent(safeReturnPath)}`;
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -944,13 +957,17 @@ function upsertTelegramUser(profile) {
 }
 
 app.get("/", (req, res) => {
-  req.session.returnTo = "/";
   const polls = getPolls();
+  const activePolls = polls.filter((poll) => poll.is_active);
+  const postLoginReturnTo =
+    activePolls.length === 1 ? `/polls/${activePolls[0].slug}` : "/";
+  req.session.returnTo = postLoginReturnTo;
+
   res.render("polls-index", {
     polls,
     telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
-    telegramAuthUrl: `${BASE_URL}/auth/telegram/widget`,
+    telegramAuthUrl: buildTelegramAuthUrl(postLoginReturnTo),
   });
 });
 
@@ -981,7 +998,7 @@ app.get("/polls/:slug", (req, res) => {
     telegramStatus,
     telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
-    telegramAuthUrl: `${BASE_URL}/auth/telegram/widget`,
+    telegramAuthUrl: buildTelegramAuthUrl(`/polls/${poll.slug}`),
   });
 });
 
@@ -1056,7 +1073,7 @@ app.get("/polls/:slug/report/export.xls", (req, res) => {
 });
 
 function finishTelegramLogin(req, res, payload, mode = "json") {
-  const returnTo = req.session.returnTo || "/";
+  const returnTo = sanitizeReturnPath(req.query.next || req.session.returnTo || "/");
   console.log("Telegram auth attempt", {
     mode,
     id: payload.id || null,
@@ -1428,6 +1445,8 @@ app.use((req, res) => {
   res.status(404).render("error", {
     title: "Страница не найдена",
     message: "Проверьте адрес или вернитесь на главную.",
+    redirectUrl: "/",
+    redirectDelay: 5,
   });
 });
 

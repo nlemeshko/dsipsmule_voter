@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>dsipsmule.one - NASSAL2026 - Голосование</title>
+    <title>Голосование - dsipsmule.one | NASSAL2026</title>
+    <% if (redirectUrl && redirectDelay) { %>
+      <meta http-equiv="refresh" content="<%= redirectDelay %>;url=<%= redirectUrl %>" />
+    <% } %>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -35,6 +38,9 @@
         <span class="eyebrow">Ошибка</span>
         <h1><%= title %></h1>
         <p><%= message %></p>
+        <% if (redirectUrl && redirectDelay) { %>
+          <p>Через <%= redirectDelay %> секунд вы будете перенаправлены на главную.</p>
+        <% } %>
         <a class="primary-button" href="/">На главную</a>
       </section>
       <footer class="site-footer">
