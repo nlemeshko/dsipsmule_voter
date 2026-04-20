@@ -146,11 +146,13 @@
                     stroke="<%= slice.color %>"
                     stroke-dasharray="<%= slice.dash %> <%= chartCircumference - slice.dash %>"
                     stroke-dashoffset="<%= -slice.offset %>"
+                    tabindex="0"
+                    data-tooltip="<%= `${slice.name} — ${slice.voteCount} голосов (${slice.percent.toFixed(1)}%)` %>"
                   >
-                    <title><%= slice.name %> — <%= slice.voteCount %> голосов (<%= slice.percent.toFixed(1) %>%)</title>
                   </circle>
                 <% }) %>
               </svg>
+              <div class="report-chart-tooltip" id="report-chart-tooltip" aria-hidden="true"></div>
               <div class="report-chart-center">
                 <strong><%= report.totals.votes %></strong>
                 <span>голосов</span>
@@ -186,5 +188,6 @@
         <span>© 2026 Witcher by <a href="https://mdsn.work" target="_blank" rel="noreferrer">MDSN</a> | All Rights Reserved | Powered by <a href="https://t.me/kelahselai" target="_blank" rel="noreferrer">Nicky</a></span>
       </footer>
     </main>
+    <script src="/report-chart.js"></script>
   </body>
 </html>
