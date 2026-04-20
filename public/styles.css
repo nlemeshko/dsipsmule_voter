@@ -102,23 +102,30 @@ textarea {
 
 .site-brand {
   display: grid;
-  justify-items: center;
-  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "nav nav"
+    "logo copy";
+  align-items: center;
+  justify-items: stretch;
+  gap: 16px 20px;
   padding: 10px 0 8px;
-  text-align: center;
+  text-align: left;
 }
 
 .site-brand-nav {
+  grid-area: nav;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 18px 28px;
+  gap: 20px 34px;
+  margin-bottom: 4px;
 }
 
 .site-brand-nav a {
   position: relative;
   color: rgba(237, 242, 248, 0.86);
-  font-size: clamp(1.2rem, 2vw, 1.8rem);
+  font-size: clamp(1.35rem, 2.1vw, 2rem);
   letter-spacing: 0.12em;
   transition: color 0.2s ease;
 }
@@ -146,15 +153,20 @@ textarea {
 }
 
 .site-brand-logo {
-  width: min(180px, 40vw);
+  grid-area: logo;
+  justify-self: end;
+  width: min(190px, 34vw);
   height: auto;
   object-fit: contain;
   filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.45));
 }
 
 .site-brand-copy {
+  grid-area: copy;
   display: grid;
-  gap: 2px;
+  justify-self: start;
+  gap: 4px;
+  align-content: center;
 }
 
 .site-brand-domain,
@@ -165,19 +177,20 @@ textarea {
 
 .site-brand-domain {
   color: rgba(237, 242, 248, 0.82);
-  letter-spacing: 0.08em;
-  font-size: clamp(1.1rem, 1.8vw, 1.5rem);
+  letter-spacing: 0.1em;
+  font-size: clamp(1.35rem, 1.95vw, 1.75rem);
 }
 
 .site-brand-copy strong {
-  font-size: clamp(2rem, 4vw, 3.6rem);
+  font-size: clamp(2.7rem, 4.7vw, 4.5rem);
   color: var(--ink);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  line-height: 0.95;
 }
 
 .site-brand-copy span:last-child {
   color: var(--muted);
-  font-size: clamp(1.2rem, 2.1vw, 1.8rem);
+  font-size: clamp(1.45rem, 2.25vw, 2rem);
 }
 
 .page-preloader {
@@ -265,7 +278,7 @@ textarea {
 }
 
 .hero-copy h1 {
-  font-size: clamp(2.6rem, 4vw, 4.6rem);
+  font-size: clamp(3rem, 4.6vw, 5.2rem);
   line-height: 1;
   max-width: none;
   text-transform: none;
@@ -279,6 +292,7 @@ textarea {
 .mini-card p {
   color: var(--muted);
   line-height: 1.7;
+  font-size: 1.3rem;
 }
 
 .eyebrow {
@@ -289,7 +303,7 @@ textarea {
   border: 1px solid rgba(111, 135, 158, 0.34);
   background: rgba(111, 135, 158, 0.12);
   color: #edf2f8;
-  font-size: 0.82rem;
+  font-size: 1rem;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -303,6 +317,7 @@ textarea {
   justify-content: center;
   min-height: 54px;
   padding: 0 22px;
+  font-size: 1.25rem;
   border-radius: 18px;
   border: 1px solid transparent;
   cursor: pointer;
@@ -431,7 +446,7 @@ textarea:focus-visible,
 .contestant-copy h2 {
   margin: 0;
   font-family: "Amatic SC", cursive;
-  font-size: 1.7rem;
+  font-size: 2rem;
   word-break: break-word;
 }
 
@@ -500,7 +515,7 @@ textarea:focus-visible,
 .user-chip span {
   display: block;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 1.05rem;
 }
 
 .notice {
@@ -558,10 +573,11 @@ textarea:focus-visible,
   display: block;
   color: var(--muted);
   margin-bottom: 8px;
+  font-size: 1.15rem;
 }
 
 .stat-card strong {
-  font-size: 2.1rem;
+  font-size: 2.45rem;
   font-family: "Amatic SC", cursive;
   color: var(--steel);
 }
@@ -585,6 +601,7 @@ textarea {
   padding: 14px 16px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--ink);
+  font-size: 1.15rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
@@ -636,6 +653,7 @@ textarea {
 .poll-group-summary span {
   color: var(--muted);
   word-break: break-word;
+  font-size: 1.15rem;
 }
 
 .poll-group-meta {
@@ -694,6 +712,7 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 1.15rem;
 }
 
 table {
@@ -720,7 +739,11 @@ tbody tr:hover {
 
 th {
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 1.08rem;
+}
+
+td {
+  font-size: 1.1rem;
 }
 
 .payload-cell {
@@ -796,6 +819,7 @@ th {
 
 .mini-card span {
   color: var(--muted);
+  font-size: 1.15rem;
 }
 
 .smule-embed,
@@ -831,7 +855,7 @@ th {
 }
 
 .thanks-panel h1 {
-  font-size: clamp(2rem, 3vw, 3rem);
+  font-size: clamp(2.4rem, 3.4vw, 3.6rem);
 }
 
 .site-footer {
@@ -842,7 +866,7 @@ th {
   width: 100%;
   text-align: center;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 1.05rem;
 }
 
 .site-footer span {
@@ -895,6 +919,16 @@ th {
 }
 
 @media (max-width: 860px) {
+  .site-brand {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "nav"
+      "logo"
+      "copy";
+    justify-items: center;
+    text-align: center;
+  }
+
   .duel,
   .duel-triple,
   .stat-grid,
@@ -920,6 +954,11 @@ th {
 
   .hero-copy h1 {
     max-width: none;
+  }
+
+  .site-brand-logo,
+  .site-brand-copy {
+    justify-self: center;
   }
 
   .contestant {
@@ -953,6 +992,22 @@ th {
     padding-bottom: 38px;
   }
 
+  .site-brand-nav a {
+    font-size: 1.2rem;
+  }
+
+  .site-brand-domain {
+    font-size: 1.2rem;
+  }
+
+  .site-brand-copy strong {
+    font-size: 2.6rem;
+  }
+
+  .site-brand-copy span:last-child {
+    font-size: 1.3rem;
+  }
+
   .contestant-copy {
     padding: 18px 18px 8px;
   }
@@ -964,7 +1019,7 @@ th {
   }
 
   .site-footer {
-    font-size: 0.82rem;
+    font-size: 0.92rem;
     line-height: 1.6;
   }
 }
