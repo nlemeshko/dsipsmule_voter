@@ -165,7 +165,6 @@
             <% } else { %>
               <% chartSlices.forEach((slice) => { %>
                 <div class="report-chart-item">
-                  <span class="report-chart-hitbox" data-tooltip="<%= `${slice.name} — ${slice.voteCount} голосов (${slice.percent.toFixed(1)}%)` %>"></span>
                   <span class="report-chart-swatch" style="background: <%= slice.color %>;"></span>
                   <div class="report-chart-copy">
                     <strong><%= slice.name %></strong>

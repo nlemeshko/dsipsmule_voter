@@ -2,9 +2,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const tooltip = document.getElementById("report-chart-tooltip");
   const chart = document.querySelector(".report-chart");
   const segments = document.querySelectorAll(".report-chart-segment");
-  const hitboxes = document.querySelectorAll("[data-tooltip]");
 
-  if (!tooltip || !chart || hitboxes.length === 0) {
+  if (!tooltip || !chart || segments.length === 0) {
     return;
   }
 
@@ -31,7 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
     tooltip.setAttribute("aria-hidden", "false");
   };
 
-  hitboxes.forEach((target) => {
+  segments.forEach((target) => {
     target.addEventListener("pointerenter", (event) => showTooltip(target, event));
     target.addEventListener("pointermove", (event) => showTooltip(target, event));
     target.addEventListener("pointerleave", hideTooltip);

@@ -1081,13 +1081,6 @@ td {
   position: relative;
 }
 
-.report-chart-hitbox {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  cursor: pointer;
-}
-
 .report-chart-swatch {
   width: 14px;
   height: 14px;
