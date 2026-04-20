@@ -337,6 +337,98 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function canViewPollReport(poll, isAdmin) {
+  return Boolean(poll) && (!poll.is_active || isAdmin);
+}
+
+function renderPollReportExcel(report) {
+  const participantRows = report.participants
+    .map(
+      (participant, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(participant.name)}</td>
+          <td>${participant.voteCount}</td>
+          <td>${participant.uniqueVoterCount}</td>
+          <td>${participant.is_active ? "Активен" : "Скрыт"}</td>
+        </tr>`,
+    )
+    .join("");
+
+  const voteRows = report.participants
+    .flatMap((participant) =>
+      participant.voteDetails.map(
+        (vote, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(participant.name)}</td>
+            <td>${escapeHtml(formatDate(vote.created_at))}</td>
+            <td>${escapeHtml(vote.telegram_id)}</td>
+            <td>${escapeHtml(vote.full_name || "")}</td>
+            <td>${escapeHtml(vote.username ? `@${vote.username}` : "")}</td>
+            <td>${escapeHtml(vote.loser_name || "")}</td>
+          </tr>`,
+      ),
+    )
+    .join("");
+
+  const safeTitle = escapeHtml(report.poll.title);
+  const safeDescription = escapeHtml(report.poll.description || "");
+  const generatedAt = escapeHtml(formatDate(nowIso()));
+
+  return `<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>${safeTitle}</title>
+  </head>
+  <body>
+    <table border="1">
+      <tr><th colspan="2">Отчет по голосованию</th></tr>
+      <tr><td>Этап</td><td>${safeTitle}</td></tr>
+      <tr><td>Описание</td><td>${safeDescription}</td></tr>
+      <tr><td>Статус</td><td>${report.poll.is_active ? "Открыт" : "Закрыт"}</td></tr>
+      <tr><td>Участников</td><td>${report.totals.participants}</td></tr>
+      <tr><td>Голосов</td><td>${report.totals.votes}</td></tr>
+      <tr><td>Людей</td><td>${report.totals.voters}</td></tr>
+      <tr><td>Сформирован</td><td>${generatedAt}</td></tr>
+    </table>
+    <br />
+    <table border="1">
+      <tr>
+        <th>#</th>
+        <th>Участник</th>
+        <th>Голосов</th>
+        <th>Людей</th>
+        <th>Статус</th>
+      </tr>
+      ${participantRows}
+    </table>
+    <br />
+    <table border="1">
+      <tr>
+        <th>#</th>
+        <th>За кого</th>
+        <th>Когда</th>
+        <th>Telegram ID</th>
+        <th>Пользователь</th>
+        <th>Username</th>
+        <th>Против кого</th>
+      </tr>
+      ${voteRows}
+    </table>
+  </body>
+</html>`;
+}
+
 function ensureUser(req, res, next) {
   if (!req.session.user) {
     return res.redirect("/");
@@ -924,7 +1016,7 @@ app.get("/polls/:slug/report", (req, res) => {
     });
   }
 
-  if (poll.is_active && !req.session.isAdmin) {
+  if (!canViewPollReport(poll, req.session.isAdmin)) {
     return res.status(403).render("error", {
       title: "Отчет пока закрыт",
       message: "Отчет станет доступен всем после закрытия этапа голосования.",
@@ -937,6 +1029,30 @@ app.get("/polls/:slug/report", (req, res) => {
     report,
     formatDate,
   });
+});
+
+app.get("/polls/:slug/report/export.xls", (req, res) => {
+  const poll = getPollBySlug(req.params.slug);
+  if (!poll) {
+    return res.status(404).render("error", {
+      title: "Файл не найден",
+      message: "Проверьте ссылку на выгрузку отчета.",
+    });
+  }
+
+  if (!canViewPollReport(poll, req.session.isAdmin)) {
+    return res.status(403).render("error", {
+      title: "Файл пока закрыт",
+      message: "Выгрузка станет доступна после закрытия этапа голосования.",
+    });
+  }
+
+  const report = getPollReportData(poll.id);
+  const filename = `${slugify(poll.slug || poll.title || "report") || "report"}.xls`;
+
+  res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(`\uFEFF${renderPollReportExcel(report)}`);
 });
 
 function finishTelegramLogin(req, res, payload, mode = "json") {

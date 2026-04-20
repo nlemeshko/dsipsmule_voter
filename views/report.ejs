@@ -12,14 +12,7 @@
     />
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body class="preloading">
-    <div class="page-preloader" id="page-preloader" aria-hidden="true">
-      <img
-        class="page-preloader-image"
-        src="https://dsipsmule.one/wp-content/uploads/2025/09/cropped-image.png"
-        alt="Loading"
-      />
-    </div>
+  <body>
     <main class="shell dashboard-shell">
       <header class="site-brand">
         <nav class="site-brand-nav" aria-label="Основная навигация">
@@ -64,47 +57,53 @@
                 </div>
               </summary>
               <div class="report-participant-body">
-                <% if (participant.embed_html) { %>
-                  <div class="mini-embed"><%- participant.embed_html %></div>
-                <% } %>
+                <div class="report-participant-layout">
+                  <% if (participant.embed_html) { %>
+                    <aside class="report-participant-media">
+                      <div class="mini-embed mini-embed-compact"><%- participant.embed_html %></div>
+                    </aside>
+                  <% } %>
 
-                <% if (participant.voteDetails.length === 0) { %>
-                  <div class="notice">За этого участника не было голосов.</div>
-                <% } else { %>
-                  <div class="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Когда</th>
-                          <th>Telegram ID</th>
-                          <th>Пользователь</th>
-                          <th>Username</th>
-                          <th>Против кого</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <% participant.voteDetails.forEach((vote) => { %>
-                          <tr>
-                            <td><%= formatDate(vote.created_at) %></td>
-                            <td><%= vote.telegram_id %></td>
-                            <td>
-                              <div class="report-user">
-                                <% if (vote.photo_url) { %>
-                                  <img class="report-user-avatar" src="<%= vote.photo_url %>" alt="<%= vote.full_name || vote.telegram_id %>" />
-                                <% } else { %>
-                                  <span class="report-user-avatar report-user-fallback"><%= (vote.full_name || vote.telegram_id || "?").trim().charAt(0).toUpperCase() %></span>
-                                <% } %>
-                                <span><%= vote.full_name || "—" %></span>
-                              </div>
-                            </td>
-                            <td><%= vote.username ? `@${vote.username}` : "—" %></td>
-                            <td><%= vote.loser_name || "—" %></td>
-                          </tr>
-                        <% }) %>
-                      </tbody>
-                    </table>
+                  <div class="report-participant-stats">
+                    <% if (participant.voteDetails.length === 0) { %>
+                      <div class="notice">За этого участника не было голосов.</div>
+                    <% } else { %>
+                      <div class="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Когда</th>
+                              <th>Telegram ID</th>
+                              <th>Пользователь</th>
+                              <th>Username</th>
+                              <th>Против кого</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <% participant.voteDetails.forEach((vote) => { %>
+                              <tr>
+                                <td><%= formatDate(vote.created_at) %></td>
+                                <td><%= vote.telegram_id %></td>
+                                <td>
+                                  <div class="report-user">
+                                    <% if (vote.photo_url) { %>
+                                      <img class="report-user-avatar" src="<%= vote.photo_url %>" alt="<%= vote.full_name || vote.telegram_id %>" />
+                                    <% } else { %>
+                                      <span class="report-user-avatar report-user-fallback"><%= (vote.full_name || vote.telegram_id || "?").trim().charAt(0).toUpperCase() %></span>
+                                    <% } %>
+                                    <span><%= vote.full_name || "—" %></span>
+                                  </div>
+                                </td>
+                                <td><%= vote.username ? `@${vote.username}` : "—" %></td>
+                                <td><%= vote.loser_name || "—" %></td>
+                              </tr>
+                            <% }) %>
+                          </tbody>
+                        </table>
+                      </div>
+                    <% } %>
                   </div>
-                <% } %>
+                </div>
               </div>
             </details>
           <% }) %>
@@ -148,10 +147,15 @@
         </div>
       </section>
 
+      <section class="panel report-export-panel">
+        <h2>Выгрузка</h2>
+        <p>Скачать Excel-файл со всей статистикой этапа, участниками и полным логом голосов.</p>
+        <a class="primary-button" href="/polls/<%= poll.slug %>/report/export.xls">Скачать Excel</a>
+      </section>
+
       <footer class="site-footer">
         <span>© 2026 Witcher by <a href="https://mdsn.work" target="_blank" rel="noreferrer">MDSN</a> | All Rights Reserved | Powered by <a href="https://t.me/kelahselai" target="_blank" rel="noreferrer">Nicky</a></span>
       </footer>
     </main>
-    <script src="/site.js"></script>
   </body>
 </html>
