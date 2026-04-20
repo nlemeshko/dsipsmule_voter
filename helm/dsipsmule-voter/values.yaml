@@ -29,15 +29,19 @@ service:
   port: 3000
 
 ingress:
-  enabled: false
-  className: ""
-  annotations: {}
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod-dns
   hosts:
-    - host: vote.example.com
+    - host: vote.dsipsmule.one
       paths:
         - path: /
           pathType: Prefix
-  tls: []
+  tls:
+    - hosts:
+        - vote.dsipsmule.one
+      secretName: vote.dsipsmule.one-tls
 
 resources:
   limits:
@@ -53,7 +57,7 @@ affinity: {}
 
 app:
   port: 3000
-  baseUrl: https://vote.example.com
+  baseUrl: https://vote.dsipsmule.one
   sessionSecret: change-me-session-secret
   telegramBotUsername: dsipsmule_bot
   telegramBotToken: change-me-bot-token
