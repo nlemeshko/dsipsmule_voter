@@ -1040,6 +1040,7 @@ td {
   border-radius: 50%;
   background: linear-gradient(180deg, rgba(17, 25, 35, 0.98), rgba(11, 17, 25, 0.96));
   border: 1px solid var(--line);
+  pointer-events: none;
 }
 
 .report-chart-center {
@@ -1050,6 +1051,7 @@ td {
   place-items: center;
   align-content: center;
   text-align: center;
+  pointer-events: none;
 }
 
 .report-chart-center strong {
