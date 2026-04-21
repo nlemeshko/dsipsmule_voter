@@ -674,6 +674,18 @@ textarea {
   gap: 14px;
 }
 
+.report-participant-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.report-participant-meta {
+  display: inline-flex !important;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
 .report-place-badge {
   display: inline-flex;
   align-items: center;
@@ -688,8 +700,29 @@ textarea {
   line-height: 1;
 }
 
+.report-place-1 {
+  color: #f4d27a;
+  border-color: rgba(244, 210, 122, 0.38);
+  background: linear-gradient(180deg, rgba(244, 210, 122, 0.18), rgba(90, 63, 13, 0.16));
+  box-shadow: 0 0 0 1px rgba(244, 210, 122, 0.08) inset;
+}
+
+.report-place-2 {
+  color: #d7dee8;
+  border-color: rgba(215, 222, 232, 0.36);
+  background: linear-gradient(180deg, rgba(215, 222, 232, 0.16), rgba(95, 107, 123, 0.15));
+  box-shadow: 0 0 0 1px rgba(215, 222, 232, 0.08) inset;
+}
+
+.report-place-3 {
+  color: #d7a274;
+  border-color: rgba(215, 162, 116, 0.34);
+  background: linear-gradient(180deg, rgba(215, 162, 116, 0.18), rgba(109, 63, 34, 0.15));
+  box-shadow: 0 0 0 1px rgba(215, 162, 116, 0.08) inset;
+}
+
 .report-votes-label {
-  color: var(--success);
+  color: var(--success) !important;
 }
 
 .poll-group-meta {

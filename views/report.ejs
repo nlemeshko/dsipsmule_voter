@@ -62,11 +62,11 @@
             <details class="poll-group">
               <summary class="poll-group-summary">
                 <div class="report-participant-heading">
-                  <span class="report-place-badge">#<%= currentPlace %></span>
+                  <span class="report-place-badge report-place-<%= Math.min(currentPlace, 3) %>">#<%= currentPlace %></span>
                 </div>
-                <div>
+                <div class="report-participant-copy">
                   <strong><%= participant.name %></strong>
-                  <span><span class="report-votes-label">Голосов:</span> <%= participant.voteCount %> | Людей: <%= participant.uniqueVoterCount %></span>
+                  <span class="report-participant-meta"><span class="report-votes-label">Голосов:</span> <%= participant.voteCount %> | Людей: <%= participant.uniqueVoterCount %></span>
                 </div>
               </summary>
               <div class="report-participant-body">
