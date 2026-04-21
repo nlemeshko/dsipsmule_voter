@@ -672,11 +672,14 @@ textarea {
   display: flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .report-participant-copy {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .report-participant-title {
@@ -690,27 +693,35 @@ textarea {
   align-items: baseline;
 }
 
-.report-bonus-chip {
-  display: inline-flex !important;
+.report-summary-side {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 10px 3px 4px;
-  border-radius: 999px;
-  background: rgba(244, 210, 122, 0.08);
-  border: 1px solid rgba(244, 210, 122, 0.2);
+  justify-content: center;
+  margin-left: 8px;
+  margin-right: 30px;
+  flex: 0 0 auto;
 }
 
 .report-witcher-badge {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   object-fit: contain;
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(244, 210, 122, 0.16), 0 0 20px rgba(83, 154, 255, 0.12);
 }
 
 .report-votes-metric {
+  display: inline-flex !important;
+  align-items: baseline;
+  gap: 8px;
   color: var(--success) !important;
+}
+
+.report-votes-value {
+  color: var(--success) !important;
+  font-size: 1.9rem;
+  line-height: 0.9;
 }
 
 .report-bonus-note {

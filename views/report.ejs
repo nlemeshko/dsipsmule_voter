@@ -63,19 +63,24 @@
               <summary class="poll-group-summary">
                 <div class="report-participant-heading">
                   <span class="report-place-badge report-place-<%= Math.min(currentPlace, 3) %>">#<%= currentPlace %></span>
-                </div>
-                <div class="report-participant-copy">
-                  <strong class="report-participant-title"><span><%= participant.name %></span></strong>
-                  <span class="report-participant-meta">
-                    <span class="report-votes-metric"><span class="report-votes-label">Голосов:</span> <%= participant.voteCount %></span>
-                    <% if (participant.witcher_choice) { %>
-                      <span class="report-bonus-chip">
-                        <img class="report-witcher-badge" src="/witcher-choice.png" alt="Выбор Ведьмака" />
-                        <span class="report-bonus-note">+2 выбор Ведьмака</span>
+                  <div class="report-participant-copy">
+                    <strong class="report-participant-title"><span><%= participant.name %></span></strong>
+                    <span class="report-participant-meta">
+                      <span class="report-votes-metric">
+                        <span class="report-votes-label">Голосов:</span>
+                        <span class="report-votes-value"><%= participant.voteCount %></span>
                       </span>
-                    <% } %>
-                    <span class="report-people-metric">| Людей: <%= participant.uniqueVoterCount %></span>
-                  </span>
+                      <% if (participant.witcher_choice) { %>
+                        <span class="report-bonus-note">+2 выбор Ведьмака</span>
+                      <% } %>
+                      <span class="report-people-metric">| Людей: <%= participant.uniqueVoterCount %></span>
+                    </span>
+                  </div>
+                </div>
+                <div class="report-summary-side">
+                  <% if (participant.witcher_choice) { %>
+                    <img class="report-witcher-badge" src="/witcher-choice.png" alt="Выбор Ведьмака" />
+                  <% } %>
                 </div>
               </summary>
               <div class="report-participant-body">
