@@ -598,6 +598,18 @@ function getParticipantsByIds(ids, pollId) {
   return ids.map((id) => byId.get(id)).filter(Boolean);
 }
 
+function completedVotesFilter(alias = "v") {
+  return `
+    EXISTS (
+      SELECT 1
+      FROM user_poll_progress upp
+      WHERE upp.user_id = ${alias}.voter_user_id
+        AND upp.poll_id = ${alias}.poll_id
+        AND upp.completed_at IS NOT NULL
+    )
+  `;
+}
+
 function ensureCurrentChoices(state) {
   const normalized = {
     remainingIds: Array.isArray(state.remainingIds) ? state.remainingIds : [],
@@ -748,6 +760,7 @@ function getPollReportData(pollId) {
       JOIN telegram_users tu ON tu.id = v.voter_user_id
       JOIN participants loser ON loser.id = v.loser_participant_id
       WHERE v.poll_id = ?
+        AND ${completedVotesFilter("v")}
       ORDER BY v.created_at DESC
     `)
     .all(pollId);
@@ -791,7 +804,13 @@ function adminStats() {
   const totals = {
     polls: db.prepare("SELECT COUNT(*) AS count FROM polls").get().count,
     users: db.prepare("SELECT COUNT(*) AS count FROM telegram_users").get().count,
-    votes: db.prepare("SELECT COUNT(*) AS count FROM votes").get().count,
+    votes: db
+      .prepare(`
+        SELECT COUNT(*) AS count
+        FROM votes v
+        WHERE ${completedVotesFilter("v")}
+      `)
+      .get().count,
     participants: db
       .prepare("SELECT COUNT(*) AS count FROM participants WHERE is_active = 1")
       .get().count,
@@ -811,7 +830,9 @@ function adminStats() {
         COUNT(v.id) + CASE WHEN p.witcher_choice = 1 THEN 2 ELSE 0 END AS wins
       FROM participants p
       JOIN polls poll ON poll.id = p.poll_id
-      LEFT JOIN votes v ON v.winner_participant_id = p.id
+      LEFT JOIN votes v
+        ON v.winner_participant_id = p.id
+       AND ${completedVotesFilter("v")}
       WHERE p.is_active = 1
       GROUP BY p.id
       ORDER BY wins DESC, p.name ASC
@@ -834,6 +855,7 @@ function adminStats() {
       JOIN telegram_users tu ON tu.id = v.voter_user_id
       JOIN participants winner ON winner.id = v.winner_participant_id
       JOIN participants loser ON loser.id = v.loser_participant_id
+      WHERE ${completedVotesFilter("v")}
       ORDER BY v.created_at DESC
       LIMIT 100
     `)
