@@ -429,7 +429,7 @@ function escapeHtml(value) {
 }
 
 function canViewPollReport(poll, isAdmin) {
-  return Boolean(poll) && (!poll.is_active || isAdmin);
+  return Boolean(poll) && (Boolean(isAdmin) || (poll.is_visible && !poll.is_active));
 }
 
 function renderPollReportExcel(report) {
