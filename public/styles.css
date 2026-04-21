@@ -718,10 +718,18 @@ textarea {
   color: var(--success) !important;
 }
 
-.report-votes-value {
+.report-votes-label {
+  display: inline-block !important;
   color: var(--success) !important;
-  font-size: 1.9rem;
-  line-height: 0.9;
+}
+
+.report-votes-value {
+  display: inline-block !important;
+  color: var(--success) !important;
+  font-size: 2.45rem !important;
+  font-weight: 700;
+  line-height: 0.82;
+  text-shadow: 0 0 14px rgba(93, 214, 123, 0.18);
 }
 
 .report-bonus-note {

@@ -68,10 +68,10 @@
                     <span class="report-participant-meta">
                       <span class="report-votes-metric">
                         <span class="report-votes-label">Голосов:</span>
-                        <span class="report-votes-value"><%= participant.voteCount %></span>
+                        <strong class="report-votes-value"><%= participant.voteCount %></strong>
                       </span>
                       <% if (participant.witcher_choice) { %>
-                        <span class="report-bonus-note">+2 выбор Ведьмака</span>
+                        <span class="report-bonus-note">Выбор Ведьмака</span>
                       <% } %>
                       <span class="report-people-metric">| Людей: <%= participant.uniqueVoterCount %></span>
                     </span>
