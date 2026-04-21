@@ -181,7 +181,12 @@
                     <tbody>
                       <% poll.participants.forEach((participant) => { %>
                         <tr>
-                          <td class="participant-name-cell"><strong><%= participant.name %></strong></td>
+                          <td class="participant-name-cell">
+                            <strong><%= participant.name %></strong>
+                            <% if (participant.witcher_choice) { %>
+                              <span class="admin-witcher-choice">Выбор Ведьмака</span>
+                            <% } %>
+                          </td>
                           <td><%= participant.is_active ? "Активен" : "Отключен" %></td>
                           <td class="payload-cell">
                             <% if (participant.embed_html) { %>
@@ -240,6 +245,11 @@
                             </form>
                           </td>
                           <td class="participant-actions">
+                            <form method="post" action="/admin/participants/<%= participant.id %>/witcher-toggle">
+                              <button class="ghost-button <%= participant.witcher_choice ? '' : 'witcher-button' %>" type="submit">
+                                <%= participant.witcher_choice ? "Снять выбор Ведьмака" : "Выбор Ведьмака" %>
+                              </button>
+                            </form>
                             <form method="post" action="/admin/participants/<%= participant.id %>/toggle">
                               <button class="ghost-button" type="submit">
                                 <%= participant.is_active ? "Отключить" : "Включить" %>

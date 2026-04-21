@@ -679,6 +679,13 @@ textarea {
   gap: 8px;
 }
 
+.report-participant-title {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
 .report-participant-meta {
   display: inline-flex !important;
   flex-wrap: wrap;
@@ -686,8 +693,21 @@ textarea {
   align-items: baseline;
 }
 
+.report-witcher-badge {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  object-fit: contain;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(244, 210, 122, 0.16), 0 0 20px rgba(83, 154, 255, 0.12);
+}
+
 .report-votes-metric {
   color: var(--success) !important;
+}
+
+.report-bonus-note {
+  color: #f4d27a !important;
 }
 
 .report-people-metric {
@@ -854,6 +874,17 @@ td {
   min-width: 180px;
 }
 
+.admin-witcher-choice {
+  display: inline-flex !important;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 210, 122, 0.28);
+  background: linear-gradient(180deg, rgba(244, 210, 122, 0.16), rgba(90, 63, 13, 0.14));
+  color: #f4d27a !important;
+  font-size: 1rem !important;
+}
+
 .participant-edit-cell {
   min-width: 320px;
 }
@@ -872,6 +903,11 @@ td {
 
 .participant-actions form + form {
   margin-top: 10px;
+}
+
+.witcher-button {
+  border-color: rgba(244, 210, 122, 0.28);
+  color: #f4d27a;
 }
 
 .participant-votes summary {

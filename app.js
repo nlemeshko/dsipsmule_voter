@@ -64,6 +64,7 @@ db.exec(`
     description TEXT,
     image_url TEXT,
     embed_html TEXT,
+    witcher_choice INTEGER NOT NULL DEFAULT 0,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -118,6 +119,10 @@ if (!participantColumns.includes("embed_html")) {
 
 if (!participantColumns.includes("poll_id")) {
   db.exec("ALTER TABLE participants ADD COLUMN poll_id INTEGER");
+}
+
+if (!participantColumns.includes("witcher_choice")) {
+  db.exec("ALTER TABLE participants ADD COLUMN witcher_choice INTEGER NOT NULL DEFAULT 0");
 }
 
 const userColumns = db
@@ -710,7 +715,7 @@ function getPollReportData(pollId) {
 
   const participants = db
     .prepare(`
-      SELECT id, name, embed_html, is_active, created_at, updated_at
+      SELECT id, name, embed_html, witcher_choice, is_active, created_at, updated_at
       FROM participants
       WHERE poll_id = ?
       ORDER BY created_at ASC, id ASC
@@ -746,19 +751,25 @@ function getPollReportData(pollId) {
 
   const participantsWithVotes = participants.map((participant) => {
     const voteDetails = votesByWinnerId.get(participant.id) || [];
+    const witcherBonus = participant.witcher_choice ? 2 : 0;
     return {
       ...participant,
-      voteCount: voteDetails.length,
+      rawVoteCount: voteDetails.length,
+      witcherBonus,
+      voteCount: voteDetails.length + witcherBonus,
       uniqueVoterCount: new Set(voteDetails.map((vote) => vote.telegram_id)).size,
       voteDetails,
     };
   });
 
+  const totalAdjustedVotes = participantsWithVotes.reduce((sum, participant) => sum + participant.voteCount, 0);
+
   return {
     poll,
     totals: {
       participants: participantsWithVotes.length,
-      votes: voteRows.length,
+      votes: totalAdjustedVotes,
+      rawVotes: voteRows.length,
       voters: new Set(voteRows.map((vote) => vote.telegram_id)).size,
     },
     participants: participantsWithVotes.sort((left, right) => right.voteCount - left.voteCount || left.name.localeCompare(right.name, "ru")),
@@ -785,6 +796,7 @@ function adminStats() {
         p.description,
         p.image_url,
         p.embed_html,
+        p.witcher_choice,
         poll.title AS poll_title,
         COUNT(v.id) AS wins
       FROM participants p
@@ -837,7 +849,7 @@ function adminStats() {
 
   const participants = db
     .prepare(`
-      SELECT p.id, p.name, p.description, p.image_url, p.embed_html, p.is_active, p.created_at, p.updated_at, p.poll_id, poll.title AS poll_title, poll.slug AS poll_slug
+      SELECT p.id, p.name, p.description, p.image_url, p.embed_html, p.witcher_choice, p.is_active, p.created_at, p.updated_at, p.poll_id, poll.title AS poll_title, poll.slug AS poll_slug
       FROM participants p
       LEFT JOIN polls poll ON poll.id = p.poll_id
       ORDER BY p.created_at DESC
@@ -1517,6 +1529,25 @@ app.post("/admin/participants/:id/toggle", ensureAdmin, (req, res) => {
 
   db.prepare("UPDATE participants SET is_active = ?, updated_at = ? WHERE id = ?").run(
     participant.is_active ? 0 : 1,
+    nowIso(),
+    id,
+  );
+
+  res.redirect("/admin");
+});
+
+app.post("/admin/participants/:id/witcher-toggle", ensureAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const participant = db
+    .prepare("SELECT id, witcher_choice FROM participants WHERE id = ?")
+    .get(id);
+
+  if (!participant) {
+    return res.redirect("/admin");
+  }
+
+  db.prepare("UPDATE participants SET witcher_choice = ?, updated_at = ? WHERE id = ?").run(
+    participant.witcher_choice ? 0 : 1,
     nowIso(),
     id,
   );
