@@ -66,7 +66,10 @@
                 </div>
                 <div class="report-participant-copy">
                   <strong><%= participant.name %></strong>
-                  <span class="report-participant-meta"><span class="report-votes-label">Голосов:</span> <%= participant.voteCount %> | Людей: <%= participant.uniqueVoterCount %></span>
+                  <span class="report-participant-meta">
+                    <span class="report-votes-metric"><span class="report-votes-label">Голосов:</span> <%= participant.voteCount %></span>
+                    <span class="report-people-metric">| Людей: <%= participant.uniqueVoterCount %></span>
+                  </span>
                 </div>
               </summary>
               <div class="report-participant-body">

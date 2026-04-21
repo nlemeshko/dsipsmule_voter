@@ -686,6 +686,14 @@ textarea {
   align-items: baseline;
 }
 
+.report-votes-metric {
+  color: var(--success) !important;
+}
+
+.report-people-metric {
+  color: var(--muted) !important;
+}
+
 .report-place-badge {
   display: inline-flex;
   align-items: center;
