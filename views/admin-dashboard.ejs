@@ -128,8 +128,14 @@
                 <strong><%= poll.title %></strong>
                 <p><%= poll.description || "Без описания" %></p>
                 <span><%= baseUrl %>/polls/<%= poll.slug %></span>
+                <span><%= poll.is_visible ? "Видимость: Видно на главной" : "Видимость: Скрыт с главной" %></span>
                 <span>Статус: <%= poll.is_active ? "Открыт" : "Закрыт" %></span>
               </div>
+              <form method="post" action="/admin/polls/<%= poll.id %>/visibility">
+                <button class="ghost-button" type="submit">
+                  <%= poll.is_visible ? "Скрыть этап" : "Показать этап" %>
+                </button>
+              </form>
               <form method="post" action="/admin/polls/<%= poll.id %>/toggle">
                 <button class="ghost-button" type="submit">
                   <%= poll.is_active ? "Закрыть этап" : "Открыть этап" %>

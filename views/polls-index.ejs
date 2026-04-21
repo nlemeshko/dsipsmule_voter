@@ -56,6 +56,9 @@
               <div>
                 <strong><%= poll.title %></strong>
                 <p><%= poll.description || "Описание пока не добавлено." %></p>
+                <% if (!poll.is_visible) { %>
+                  <span>Скрыт с главной</span>
+                <% } %>
                 <span class="<%= poll.is_active ? 'status-open' : 'status-closed' %>"><%= poll.is_active ? "Статус: Открыт" : "Статус: Закрыт" %></span>
               </div>
               <% if (poll.is_active) { %>

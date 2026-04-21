@@ -32,6 +32,7 @@ db.exec(`
     slug TEXT NOT NULL UNIQUE,
     description TEXT,
     redirect_url TEXT,
+    is_visible INTEGER NOT NULL DEFAULT 1,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -112,6 +113,15 @@ const participantColumns = db
   .prepare("PRAGMA table_info(participants)")
   .all()
   .map((column) => column.name);
+
+const pollColumns = db
+  .prepare("PRAGMA table_info(polls)")
+  .all()
+  .map((column) => column.name);
+
+if (!pollColumns.includes("is_visible")) {
+  db.exec("ALTER TABLE polls ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1");
+}
 
 if (!participantColumns.includes("embed_html")) {
   db.exec("ALTER TABLE participants ADD COLUMN embed_html TEXT");
@@ -547,7 +557,7 @@ function parseVotingState(rawState) {
 function getPolls() {
   return db
     .prepare(`
-      SELECT id, title, slug, description, redirect_url, is_active, created_at
+      SELECT id, title, slug, description, redirect_url, is_visible, is_active, created_at
       FROM polls
       ORDER BY created_at ASC, id ASC
     `)
@@ -557,7 +567,7 @@ function getPolls() {
 function getPollBySlug(slug) {
   return db
     .prepare(`
-      SELECT id, title, slug, description, redirect_url, is_active
+      SELECT id, title, slug, description, redirect_url, is_visible, is_active
       FROM polls
       WHERE slug = ?
     `)
@@ -1031,7 +1041,8 @@ function upsertTelegramUser(profile) {
 }
 
 app.get("/", (req, res) => {
-  const polls = getPolls();
+  const isAdmin = Boolean(req.session.isAdmin);
+  const polls = getPolls().filter((poll) => isAdmin || poll.is_visible);
   const activePolls = polls.filter((poll) => poll.is_active);
   const postLoginReturnTo =
     activePolls.length === 1 ? `/polls/${activePolls[0].slug}` : "/";
@@ -1048,7 +1059,7 @@ app.get("/", (req, res) => {
 app.get("/polls/:slug", (req, res) => {
   req.session.returnTo = `/polls/${req.params.slug}`;
   const poll = getPollBySlug(req.params.slug);
-  if (!poll || !poll.is_active) {
+  if (!poll || !poll.is_active || (!poll.is_visible && !req.session.isAdmin)) {
     return res.status(404).render("error", {
       title: "Голосование не найдено",
       message: "Проверьте ссылку на голосование.",
@@ -1432,9 +1443,28 @@ app.post("/admin/polls", ensureAdmin, (req, res) => {
 
   const timestamp = nowIso();
   db.prepare(`
-    INSERT INTO polls (title, slug, description, redirect_url, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 1, ?, ?)
+    INSERT INTO polls (title, slug, description, redirect_url, is_visible, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 1, 1, ?, ?)
   `).run(title, slug, description, redirectUrl, timestamp, timestamp);
+
+  res.redirect("/admin");
+});
+
+app.post("/admin/polls/:id/visibility", ensureAdmin, (req, res) => {
+  const pollId = Number(req.params.id);
+  const poll = db
+    .prepare("SELECT id, is_visible FROM polls WHERE id = ?")
+    .get(pollId);
+
+  if (!poll) {
+    return res.redirect("/admin");
+  }
+
+  db.prepare("UPDATE polls SET is_visible = ?, updated_at = ? WHERE id = ?").run(
+    poll.is_visible ? 0 : 1,
+    nowIso(),
+    pollId,
+  );
 
   res.redirect("/admin");
 });
