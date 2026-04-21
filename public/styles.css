@@ -680,10 +680,7 @@ textarea {
 }
 
 .report-participant-title {
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  display: block !important;
 }
 
 .report-participant-meta {
@@ -693,10 +690,20 @@ textarea {
   align-items: baseline;
 }
 
+.report-bonus-chip {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 999px;
+  background: rgba(244, 210, 122, 0.08);
+  border: 1px solid rgba(244, 210, 122, 0.2);
+}
+
 .report-witcher-badge {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
   object-fit: contain;
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(244, 210, 122, 0.16), 0 0 20px rgba(83, 154, 255, 0.12);
@@ -747,6 +754,13 @@ textarea {
   border-color: rgba(215, 162, 116, 0.34);
   background: linear-gradient(180deg, rgba(215, 162, 116, 0.18), rgba(109, 63, 34, 0.15));
   box-shadow: 0 0 0 1px rgba(215, 162, 116, 0.08) inset;
+}
+
+.report-place-badge:not(.report-place-1):not(.report-place-2):not(.report-place-3) {
+  color: #f3f6fb;
+  border-color: rgba(215, 224, 234, 0.22);
+  background: rgba(215, 224, 234, 0.06);
+  box-shadow: none;
 }
 
 .report-votes-label {

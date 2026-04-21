@@ -798,7 +798,7 @@ function adminStats() {
         p.embed_html,
         p.witcher_choice,
         poll.title AS poll_title,
-        COUNT(v.id) AS wins
+        COUNT(v.id) + CASE WHEN p.witcher_choice = 1 THEN 2 ELSE 0 END AS wins
       FROM participants p
       JOIN polls poll ON poll.id = p.poll_id
       LEFT JOIN votes v ON v.winner_participant_id = p.id
