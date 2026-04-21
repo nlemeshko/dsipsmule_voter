@@ -62,7 +62,7 @@
             <details class="poll-group">
               <summary class="poll-group-summary">
                 <div class="report-participant-heading">
-                  <span class="report-place-badge report-place-<%= Math.min(currentPlace, 3) %>">#<%= currentPlace %></span>
+                  <span class="report-place-badge<%= currentPlace <= 3 ? ` report-place-${currentPlace}` : '' %>">#<%= currentPlace %></span>
                   <div class="report-participant-copy">
                     <strong class="report-participant-title"><span><%= participant.name %></span></strong>
                     <span class="report-participant-meta">
@@ -100,9 +100,7 @@
                           <thead>
                             <tr>
                               <th>Когда</th>
-                              <th>Telegram ID</th>
                               <th>Пользователь</th>
-                              <th>Username</th>
                               <th>Против кого</th>
                             </tr>
                           </thead>
@@ -110,7 +108,6 @@
                             <% participant.voteDetails.forEach((vote) => { %>
                               <tr>
                                 <td data-label="Когда"><%= formatDate(vote.created_at) %></td>
-                                <td data-label="Telegram ID"><%= vote.telegram_id %></td>
                                 <td data-label="Пользователь">
                                   <div class="report-user">
                                     <% if (vote.photo_url) { %>
@@ -121,7 +118,6 @@
                                     <span><%= vote.full_name || "—" %></span>
                                   </div>
                                 </td>
-                                <td data-label="Username"><%= vote.username ? `@${vote.username}` : "—" %></td>
                                 <td data-label="Против кого"><%= vote.loser_name || "—" %></td>
                               </tr>
                             <% }) %>
