@@ -48,12 +48,25 @@
       <section class="panel">
         <h2>Итоги по участникам</h2>
         <div class="poll-groups">
+          <%
+            let currentPlace = 0;
+            let lastVoteCount = null;
+          %>
           <% report.participants.forEach((participant, index) => { %>
-            <details class="poll-group" <%= index === 0 ? "open" : "" %>>
+            <%
+              if (lastVoteCount === null || participant.voteCount !== lastVoteCount) {
+                currentPlace = index + 1;
+                lastVoteCount = participant.voteCount;
+              }
+            %>
+            <details class="poll-group">
               <summary class="poll-group-summary">
+                <div class="report-participant-heading">
+                  <span class="report-place-badge">#<%= currentPlace %></span>
+                </div>
                 <div>
                   <strong><%= participant.name %></strong>
-                  <span>Голосов: <%= participant.voteCount %> | Людей: <%= participant.uniqueVoterCount %></span>
+                  <span><span class="report-votes-label">Голосов:</span> <%= participant.voteCount %> | Людей: <%= participant.uniqueVoterCount %></span>
                 </div>
               </summary>
               <div class="report-participant-body">

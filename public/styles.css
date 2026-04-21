@@ -668,6 +668,30 @@ textarea {
   font-size: 1.15rem;
 }
 
+.report-participant-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.report-place-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(202, 184, 146, 0.2);
+  background: rgba(143, 168, 193, 0.08);
+  color: var(--steel);
+  font-size: 1.25rem !important;
+  line-height: 1;
+}
+
+.report-votes-label {
+  color: var(--success);
+}
+
 .poll-group-meta {
   display: flex;
   flex-wrap: wrap;
