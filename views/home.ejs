@@ -90,7 +90,7 @@
             </form>
           <% } %>
           <section class="duel <%= votingProgress.stageType === 'triple' ? 'duel-triple' : '' %>">
-            <% votingProgress.participants.forEach((participant) => { %>
+            <% votingProgress.participants.forEach((participant, index) => { %>
               <% const artHueA = Math.floor(Math.random() * 360); %>
               <% const artHueB = Math.floor(Math.random() * 360); %>
               <% const artHueC = Math.floor(Math.random() * 360); %>
