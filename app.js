@@ -693,12 +693,30 @@ function findRegistrationForParticipant(participant, registrations) {
     (entry) =>
       String(entry.participants || "").trim() === name &&
       String(entry.avatar_url || "").trim() === avatarUrl,
-  ) || null;
+  ) || registrations.find((entry) => String(entry.participants || "").trim() === name) || null;
 }
 
 function resolveRegistrationByKey(registrationKey, registrations) {
   const key = String(registrationKey || "").trim();
   return registrations.find((entry) => entry.key === key) || null;
+}
+
+function enrichParticipantsFromRegistrations(participants, registrations) {
+  return (participants || []).map((participant) => {
+    if (String(participant?.image_url || "").trim()) {
+      return participant;
+    }
+
+    const registration = findRegistrationForParticipant(participant, registrations);
+    if (!registration?.avatar_url) {
+      return participant;
+    }
+
+    return {
+      ...participant,
+      image_url: buildParticipantImageUrl(registration.avatar_url),
+    };
+  });
 }
 
 function savePollImageFile(pollId, file) {
@@ -1542,7 +1560,7 @@ app.get("/polls/:slug/thanks", (req, res) => {
   });
 });
 
-app.get("/polls/:slug/report", (req, res) => {
+app.get("/polls/:slug/report", async (req, res) => {
   const poll = getPollBySlug(req.params.slug);
   if (!poll) {
     return res.status(404).render("error", {
@@ -1559,6 +1577,14 @@ app.get("/polls/:slug/report", (req, res) => {
   }
 
   const report = getPollReportData(poll.id);
+
+  try {
+    const registrations = await loadRegistrationsCatalog();
+    report.participants = enrichParticipantsFromRegistrations(report.participants, registrations);
+  } catch {
+    // Keep report rendering even if registrations are temporarily unavailable.
+  }
+
   res.render("report", {
     poll,
     report,
@@ -1898,6 +1924,8 @@ app.get("/admin", ensureAdmin, async (req, res) => {
     const participantRegistrationKeys = {};
 
     stats.pollsWithParticipants.forEach((poll) => {
+      poll.participants = enrichParticipantsFromRegistrations(poll.participants, registrations);
+
       poll.participants.forEach((participant) => {
         const match = findRegistrationForParticipant(participant, registrations);
         if (match) {
