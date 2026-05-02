@@ -469,6 +469,25 @@ textarea:focus-visible,
   width: 100%;
 }
 
+.audio-entry {
+  width: 100%;
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+}
+
+.audio-entry-label {
+  color: var(--muted);
+  font-size: 1.1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.audio-player {
+  width: 100%;
+}
+
 .versus {
   align-self: center;
   justify-self: center;
@@ -939,6 +958,27 @@ td {
 
 .participant-actions form + form {
   margin-top: 10px;
+}
+
+.participant-source-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.audio-admin-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.audio-admin-preview audio {
+  width: 100%;
+  max-width: 260px;
+}
+
+.audio-admin-preview span,
+.audio-admin-preview a {
+  font-size: 1rem;
+  color: var(--muted);
 }
 
 .witcher-button {

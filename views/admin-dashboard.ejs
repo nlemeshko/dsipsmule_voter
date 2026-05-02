@@ -99,7 +99,7 @@
 
         <article class="panel">
           <h2>Добавить участника</h2>
-          <form class="stack-form" method="post" action="/admin/participants">
+          <form class="stack-form" method="post" action="/admin/participants" enctype="multipart/form-data">
             <label>
               <span>Голосование</span>
               <select name="poll_id" required>
@@ -114,15 +114,18 @@
               <input type="text" name="name" required />
             </label>
             <label>
-              <span>Smule iframe</span>
-              <textarea
-                name="embed_html"
-                rows="5"
-                placeholder='<iframe frameborder="0" width="100%" height="125" src="https://www.smule.com/.../frame"></iframe>'
-                required
-              ></textarea>
+              <span>Ссылка Smule или BandLab</span>
+              <input type="url" name="source_url" placeholder="https://..." />
             </label>
-            <button class="primary-button" type="submit">Создать</button>
+            <label>
+              <span>Или загрузите MP3 вручную</span>
+              <input type="file" name="audio_file" accept=".mp3,audio/mpeg" />
+            </label>
+            <div class="participant-source-actions">
+              <button class="primary-button" type="submit" name="source_kind" value="smule">Скачать mp3 со Smule</button>
+              <button class="primary-button" type="submit" name="source_kind" value="bandlab">Скачать с BandLab</button>
+              <button class="ghost-button" type="submit" name="source_kind" value="upload">Загрузить MP3</button>
+            </div>
           </form>
         </article>
       </section>
@@ -190,7 +193,7 @@
                       <tr>
                         <th>Имя</th>
                         <th>Статус</th>
-                        <th>Smule embed</th>
+                        <th>Аудио</th>
                         <th>Статистика</th>
                         <th>Редактирование</th>
                         <th>Действия</th>
@@ -207,10 +210,20 @@
                           </td>
                           <td><%= participant.is_active ? "Активен" : "Отключен" %></td>
                           <td class="payload-cell">
-                            <% if (participant.embed_html) { %>
-                              <div class="mini-embed mini-embed-compact"><%- participant.embed_html %></div>
+                            <% if (participant.audio_url) { %>
+                              <div class="audio-admin-preview">
+                                <audio controls preload="none">
+                                  <source src="<%= participant.audio_url %>" type="audio/mpeg" />
+                                </audio>
+                                <span><%= participant.audio_source_type || "upload" %></span>
+                                <% if (participant.audio_source_url) { %>
+                                  <a href="<%= participant.audio_source_url %>" target="_blank" rel="noreferrer">Источник</a>
+                                <% } %>
+                              </div>
+                            <% } else if (participant.embed_html) { %>
+                              <div class="notice">Есть старый embed, но MP3 еще не подготовлен.</div>
                             <% } else { %>
-                              <div class="notice">Smule embed не добавлен.</div>
+                              <div class="notice">MP3 еще не загружен.</div>
                             <% } %>
                           </td>
                           <td class="participant-stats-cell">
@@ -285,16 +298,25 @@
                             </details>
                           </td>
                           <td class="participant-edit-cell">
-                            <form class="stack-form participant-edit-form" method="post" action="/admin/participants/<%= participant.id %>/update">
+                            <form class="stack-form participant-edit-form" method="post" action="/admin/participants/<%= participant.id %>/update" enctype="multipart/form-data">
                               <label>
                                 <span>Имя участника</span>
                                 <input type="text" name="name" value="<%= participant.name %>" required />
                               </label>
                               <label>
-                                <span>Smule iframe</span>
-                                <textarea name="embed_html" rows="5" required><%= participant.embed_html || "" %></textarea>
+                                <span>Новая ссылка Smule или BandLab</span>
+                                <input type="url" name="source_url" value="<%= participant.audio_source_url || "" %>" placeholder="https://..." />
                               </label>
-                              <button class="primary-button" type="submit">Сохранить</button>
+                              <label>
+                                <span>Или заменить MP3 вручную</span>
+                                <input type="file" name="audio_file" accept=".mp3,audio/mpeg" />
+                              </label>
+                              <div class="participant-source-actions">
+                                <button class="primary-button" type="submit" name="source_kind" value="smule">Скачать со Smule</button>
+                                <button class="primary-button" type="submit" name="source_kind" value="bandlab">Скачать с BandLab</button>
+                                <button class="ghost-button" type="submit" name="source_kind" value="upload">Заменить MP3</button>
+                                <button class="ghost-button" type="submit">Сохранить имя</button>
+                              </div>
                             </form>
                           </td>
                           <td class="participant-actions">

@@ -93,14 +93,20 @@
             <% votingProgress.participants.forEach((participant, index) => { %>
               <article class="contestant">
                 <div class="contestant-media">
-                  <% if (participant.embed_html) { %>
-                    <div class="smule-embed"><%- participant.embed_html %></div>
+                  <% if (participant.audio_url) { %>
+                    <div class="audio-entry">
+                      <span class="audio-entry-label">Запись <%= index + 1 %></span>
+                      <audio class="audio-player" controls preload="none" data-listen-url="/polls/<%= poll.slug %>/participants/<%= participant.id %>/listen">
+                        <source src="<%= participant.audio_url %>" type="audio/mpeg" />
+                        Ваш браузер не поддерживает встроенный аудиоплеер.
+                      </audio>
+                    </div>
                   <% } else { %>
-                    <div class="notice">iframe для этой записи не добавлен.</div>
+                    <div class="notice">MP3 для этой записи еще не загружен.</div>
                   <% } %>
                 </div>
                 <div class="contestant-copy">
-                  <h2><%= participant.name %></h2>
+                  <h2>Анонимная запись <%= index + 1 %></h2>
                 </div>
                 <form method="post" action="/vote">
                   <input type="hidden" name="poll_id" value="<%= poll.id %>" />
@@ -129,5 +135,6 @@
         <span>© 2026 Witcher by <a href="https://mdsn.work" target="_blank" rel="noreferrer">MDSN</a> | All Rights Reserved | Powered by <a href="https://t.me/kelahselai" target="_blank" rel="noreferrer">Nicky</a></span>
       </footer>
     </main>
+    <script src="/site.js"></script>
   </body>
 </html>

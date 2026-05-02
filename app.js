@@ -1,9 +1,12 @@
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
 const express = require("express");
 const session = require("express-session");
 const Database = require("better-sqlite3");
+const multer = require("multer");
 const dotenv = require("dotenv");
 
 dotenv.config();
@@ -19,8 +22,14 @@ const SESSION_SECRET =
   process.env.SESSION_SECRET || "replace-this-with-a-long-random-secret";
 const DB_PATH =
   process.env.DB_PATH || path.join(__dirname, "storage", "voting.sqlite");
+const STORAGE_DIR = path.dirname(DB_PATH);
+const MEDIA_DIR = path.join(STORAGE_DIR, "media");
+const TMP_UPLOAD_DIR = path.join(STORAGE_DIR, "tmp-uploads");
+const execFileAsync = promisify(execFile);
 
-fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+fs.mkdirSync(STORAGE_DIR, { recursive: true });
+fs.mkdirSync(MEDIA_DIR, { recursive: true });
+fs.mkdirSync(TMP_UPLOAD_DIR, { recursive: true });
 
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
@@ -66,6 +75,9 @@ db.exec(`
     description TEXT,
     image_url TEXT,
     embed_html TEXT,
+    audio_file_path TEXT,
+    audio_source_url TEXT,
+    audio_source_type TEXT,
     witcher_choice INTEGER NOT NULL DEFAULT 0,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
@@ -143,6 +155,18 @@ if (!pollColumns.includes("image_url")) {
 
 if (!participantColumns.includes("embed_html")) {
   db.exec("ALTER TABLE participants ADD COLUMN embed_html TEXT");
+}
+
+if (!participantColumns.includes("audio_file_path")) {
+  db.exec("ALTER TABLE participants ADD COLUMN audio_file_path TEXT");
+}
+
+if (!participantColumns.includes("audio_source_url")) {
+  db.exec("ALTER TABLE participants ADD COLUMN audio_source_url TEXT");
+}
+
+if (!participantColumns.includes("audio_source_type")) {
+  db.exec("ALTER TABLE participants ADD COLUMN audio_source_type TEXT");
 }
 
 if (!participantColumns.includes("poll_id")) {
@@ -259,6 +283,14 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/media", express.static(MEDIA_DIR));
+
+const upload = multer({
+  dest: TMP_UPLOAD_DIR,
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+  },
+});
 
 function nowIso() {
   return new Date().toISOString();
@@ -453,6 +485,92 @@ function escapeAttribute(value) {
     .replace(/"/g, "&quot;");
 }
 
+function normalizeMediaSourceUrl(value) {
+  return String(value || "").trim();
+}
+
+function detectAudioSourceType(sourceUrl, fallbackType = "") {
+  const url = normalizeMediaSourceUrl(sourceUrl).toLowerCase();
+  if (fallbackType === "upload") return "upload";
+  if (url.includes("smule.com")) return "smule";
+  if (url.includes("bandlab.com")) return "bandlab";
+  return fallbackType || "";
+}
+
+function participantAudioBaseName(participantId) {
+  return `participant-${participantId}`;
+}
+
+function getParticipantAudioAbsolutePath(participantId) {
+  return path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}.mp3`);
+}
+
+function clearParticipantAudioFiles(participantId) {
+  const prefix = `${participantAudioBaseName(participantId)}.`;
+  fs.readdirSync(MEDIA_DIR).forEach((fileName) => {
+    if (fileName.startsWith(prefix)) {
+      fs.rmSync(path.join(MEDIA_DIR, fileName), { force: true });
+    }
+  });
+}
+
+function buildParticipantAudioUrl(audioFilePath) {
+  const fileName = path.basename(String(audioFilePath || "").trim());
+  return fileName ? `/media/${encodeURIComponent(fileName)}` : "";
+}
+
+async function downloadAudioFromUrl(participantId, sourceUrl) {
+  const normalizedUrl = normalizeMediaSourceUrl(sourceUrl);
+  const outputTemplate = path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}.%(ext)s`);
+  const finalMp3Path = getParticipantAudioAbsolutePath(participantId);
+
+  clearParticipantAudioFiles(participantId);
+
+  await execFileAsync("yt-dlp", [
+    "--no-playlist",
+    "--extract-audio",
+    "--audio-format",
+    "mp3",
+    "--output",
+    outputTemplate,
+    normalizedUrl,
+  ]);
+
+  if (!fs.existsSync(finalMp3Path)) {
+    const candidates = fs
+      .readdirSync(MEDIA_DIR)
+      .filter((fileName) => fileName.startsWith(`${participantAudioBaseName(participantId)}.`));
+
+    const firstCandidate = candidates[0] ? path.join(MEDIA_DIR, candidates[0]) : "";
+    if (firstCandidate && fs.existsSync(firstCandidate)) {
+      fs.renameSync(firstCandidate, finalMp3Path);
+    }
+  }
+
+  if (!fs.existsSync(finalMp3Path)) {
+    throw new Error("Downloaded audio file was not created.");
+  }
+
+  return finalMp3Path;
+}
+
+function saveUploadedAudioFile(participantId, file) {
+  if (!file) {
+    throw new Error("No uploaded file provided.");
+  }
+
+  const extension = path.extname(file.originalname || "").toLowerCase();
+  if (extension !== ".mp3" && file.mimetype !== "audio/mpeg") {
+    fs.rmSync(file.path, { force: true });
+    throw new Error("Only MP3 files are supported.");
+  }
+
+  const finalPath = getParticipantAudioAbsolutePath(participantId);
+  clearParticipantAudioFiles(participantId);
+  fs.renameSync(file.path, finalPath);
+  return finalPath;
+}
+
 function normalizeEmbedHtml(embedHtml) {
   const rawValue = String(embedHtml || "").trim();
 
@@ -487,6 +605,7 @@ function decorateParticipant(participant) {
   return {
     ...participant,
     embed_html: normalizeEmbedHtml(participant.embed_html),
+    audio_url: buildParticipantAudioUrl(participant.audio_file_path),
   };
 }
 
@@ -646,7 +765,7 @@ function getPollBySlug(slug) {
 function getActiveParticipants(pollId) {
   return db
     .prepare(`
-      SELECT id, name, description, image_url, embed_html
+      SELECT id, name, description, image_url, embed_html, audio_file_path, audio_source_url, audio_source_type
       FROM participants
       WHERE poll_id = ? AND is_active = 1
       ORDER BY id ASC
@@ -660,7 +779,7 @@ function getParticipantsByIds(ids, pollId) {
   const placeholders = ids.map(() => "?").join(", ");
   const rows = db
     .prepare(
-      `SELECT id, name, description, image_url, embed_html FROM participants WHERE poll_id = ? AND id IN (${placeholders})`,
+      `SELECT id, name, description, image_url, embed_html, audio_file_path, audio_source_url, audio_source_type FROM participants WHERE poll_id = ? AND id IN (${placeholders})`,
     )
     .all(pollId, ...ids);
 
@@ -808,7 +927,7 @@ function getPollReportData(pollId) {
 
   const participants = db
     .prepare(`
-      SELECT id, name, embed_html, witcher_choice, is_active, created_at, updated_at
+      SELECT id, name, embed_html, audio_file_path, audio_source_url, audio_source_type, witcher_choice, is_active, created_at, updated_at
       FROM participants
       WHERE poll_id = ?
       ORDER BY created_at ASC, id ASC
@@ -926,6 +1045,9 @@ function adminStats() {
         p.description,
         p.image_url,
         p.embed_html,
+        p.audio_file_path,
+        p.audio_source_url,
+        p.audio_source_type,
         p.witcher_choice,
         poll.title AS poll_title,
         COUNT(v.id) + CASE WHEN p.witcher_choice = 1 THEN 2 ELSE 0 END AS wins
@@ -982,7 +1104,7 @@ function adminStats() {
 
   const participants = db
     .prepare(`
-      SELECT p.id, p.name, p.description, p.image_url, p.embed_html, p.witcher_choice, p.is_active, p.created_at, p.updated_at, p.poll_id, poll.title AS poll_title, poll.slug AS poll_slug
+      SELECT p.id, p.name, p.description, p.image_url, p.embed_html, p.audio_file_path, p.audio_source_url, p.audio_source_type, p.witcher_choice, p.is_active, p.created_at, p.updated_at, p.poll_id, poll.title AS poll_title, poll.slug AS poll_slug
       FROM participants p
       LEFT JOIN polls poll ON poll.id = p.poll_id
       ORDER BY p.created_at DESC
@@ -1006,6 +1128,37 @@ function adminStats() {
   });
 
   return { totals, leaderboard, recentVotes, recentUsers, participants, polls, pollsWithParticipants };
+}
+
+async function populateParticipantAudio(participantId, sourceKind, sourceUrl, file) {
+  const normalizedSourceUrl = normalizeMediaSourceUrl(sourceUrl);
+  const resolvedSourceType = detectAudioSourceType(normalizedSourceUrl, sourceKind);
+  let audioFilePath = "";
+
+  if (resolvedSourceType === "upload") {
+    if (!file) {
+      throw new Error("MP3 file is required for manual upload.");
+    }
+    audioFilePath = saveUploadedAudioFile(participantId, file);
+  } else {
+    if (!normalizedSourceUrl) {
+      throw new Error("Source URL is required.");
+    }
+    audioFilePath = await downloadAudioFromUrl(participantId, normalizedSourceUrl);
+  }
+
+  db.prepare(`
+    UPDATE participants
+    SET embed_html = ?, audio_file_path = ?, audio_source_url = ?, audio_source_type = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    normalizeEmbedHtml(normalizedSourceUrl),
+    audioFilePath,
+    normalizedSourceUrl,
+    resolvedSourceType,
+    nowIso(),
+    participantId,
+  );
 }
 
 function verifyTelegramLogin(payload) {
@@ -1664,6 +1817,10 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
   }
 
   const deletePollTx = db.transaction(() => {
+    const participantsToDelete = db.prepare("SELECT id FROM participants WHERE poll_id = ?").all(pollId);
+    participantsToDelete.forEach((participant) => {
+      clearParticipantAudioFiles(participant.id);
+    });
     db.prepare("DELETE FROM votes WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM user_poll_progress WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM participants WHERE poll_id = ?").run(pollId);
@@ -1674,44 +1831,91 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
   res.redirect("/admin");
 });
 
-app.post("/admin/participants", ensureAdmin, (req, res) => {
+app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async (req, res) => {
   const pollId = Number(req.body.poll_id);
   const name = String(req.body.name || "").trim();
-  const embedHtml = String(req.body.embed_html || "").trim();
+  const sourceKind = String(req.body.source_kind || "").trim();
+  const sourceUrl = String(req.body.source_url || "").trim();
 
-  if (!pollId || !name || !embedHtml) {
+  if (!pollId || !name || !sourceKind) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
     return res.redirect("/admin");
   }
 
   const timestamp = nowIso();
-  db.prepare(`
-    INSERT INTO participants (poll_id, name, description, image_url, embed_html, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-  `).run(pollId, name, "", "", embedHtml, timestamp, timestamp);
+  const result = db.prepare(`
+    INSERT INTO participants (poll_id, name, description, image_url, embed_html, audio_file_path, audio_source_url, audio_source_type, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(pollId, name, "", "", "", "", "", "", timestamp, timestamp);
 
-  res.redirect("/admin");
+  const participantId = Number(result.lastInsertRowid);
+
+  try {
+    await populateParticipantAudio(participantId, sourceKind, sourceUrl, req.file);
+    if (req.file?.path && sourceKind !== "upload") {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    res.redirect("/admin");
+  } catch (error) {
+    clearParticipantAudioFiles(participantId);
+    db.prepare("DELETE FROM participants WHERE id = ?").run(participantId);
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    res.status(400).render("error", {
+      title: "Ошибка загрузки MP3",
+      message: error.message || "Не удалось подготовить аудиофайл участника.",
+    });
+  }
 });
 
-app.post("/admin/participants/:id/update", ensureAdmin, (req, res) => {
+app.post("/admin/participants/:id/update", ensureAdmin, upload.single("audio_file"), async (req, res) => {
   const id = Number(req.params.id);
   const name = String(req.body.name || "").trim();
-  const embedHtml = String(req.body.embed_html || "").trim();
+  const sourceKind = String(req.body.source_kind || "").trim();
+  const sourceUrl = String(req.body.source_url || "").trim();
 
   const participant = db
     .prepare("SELECT id FROM participants WHERE id = ?")
     .get(id);
 
-  if (!participant || !name || !embedHtml) {
+  if (!participant || !name) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
     return res.redirect("/admin");
   }
 
   db.prepare(`
     UPDATE participants
-    SET name = ?, embed_html = ?, updated_at = ?
+    SET name = ?, updated_at = ?
     WHERE id = ?
-  `).run(name, embedHtml, nowIso(), id);
+  `).run(name, nowIso(), id);
 
-  res.redirect("/admin");
+  if (!sourceKind) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    return res.redirect("/admin");
+  }
+
+  try {
+    await populateParticipantAudio(id, sourceKind, sourceUrl, req.file);
+    if (req.file?.path && sourceKind !== "upload") {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    res.redirect("/admin");
+  } catch (error) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    res.status(400).render("error", {
+      title: "Ошибка обновления MP3",
+      message: error.message || "Не удалось обновить аудиофайл участника.",
+    });
+  }
 });
 
 app.post("/admin/participants/:id/toggle", ensureAdmin, (req, res) => {
@@ -1763,6 +1967,7 @@ app.post("/admin/participants/:id/delete", ensureAdmin, (req, res) => {
   }
 
   const deleteParticipantTx = db.transaction(() => {
+    clearParticipantAudioFiles(id);
     db.prepare(`
       DELETE FROM votes
       WHERE winner_participant_id = ? OR loser_participant_id = ?
