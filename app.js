@@ -447,8 +447,47 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+function escapeAttribute(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;");
+}
+
+function normalizeEmbedHtml(embedHtml) {
+  const rawValue = String(embedHtml || "").trim();
+
+  if (!rawValue) {
+    return "";
+  }
+
+  if (/<iframe[\s>]/i.test(rawValue)) {
+    return rawValue;
+  }
+
+  if (/^https?:\/\/(www\.)?smule\.com\//i.test(rawValue)) {
+    const smuleUrl = /\/frame\/box(?:[/?#]|$)/i.test(rawValue)
+      ? rawValue
+      : `${rawValue.replace(/\/+$/g, "")}/frame/box`;
+
+    return `<iframe frameborder="0" width="500" height="500" src="${escapeAttribute(smuleUrl)}"></iframe>`;
+  }
+
+  if (/^https?:\/\/(www\.)?bandlab\.com\//i.test(rawValue)) {
+    return `<iframe width="560" height="202" src="${escapeAttribute(rawValue)}" allowfullscreen></iframe>`;
+  }
+
+  if (/^https?:\/\//i.test(rawValue)) {
+    return `<iframe frameborder="0" width="100%" height="320" src="${escapeAttribute(rawValue)}"></iframe>`;
+  }
+
+  return rawValue;
+}
+
 function decorateParticipant(participant) {
-  return participant;
+  return {
+    ...participant,
+    embed_html: normalizeEmbedHtml(participant.embed_html),
+  };
 }
 
 function canViewPollReport(poll, isAdmin) {
@@ -774,7 +813,8 @@ function getPollReportData(pollId) {
       WHERE poll_id = ?
       ORDER BY created_at ASC, id ASC
     `)
-    .all(pollId);
+    .all(pollId)
+    .map(decorateParticipant);
 
   const voteRows = db
     .prepare(`
@@ -947,7 +987,8 @@ function adminStats() {
       LEFT JOIN polls poll ON poll.id = p.poll_id
       ORDER BY p.created_at DESC
     `)
-    .all();
+    .all()
+    .map(decorateParticipant);
 
   const polls = getPolls();
   const pollsWithParticipants = polls.map((poll) => {
