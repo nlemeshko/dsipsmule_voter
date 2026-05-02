@@ -1130,7 +1130,6 @@ function populateParticipantEmbed(participantId, embedHtml) {
     "",
     "",
     "",
-    "",
     nowIso(),
     participantId,
   );
