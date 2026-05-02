@@ -22,7 +22,6 @@ function initBlindPlayers() {
     return;
   }
 
-  const hiddenStage = document.querySelector("[data-player-stage]");
   const modal = document.querySelector("[data-player-modal]");
   const modalFrame = document.querySelector("[data-player-modal-frame]");
   const closeButton = document.querySelector("[data-player-close]");
@@ -40,17 +39,16 @@ function initBlindPlayers() {
 
   cards.forEach((card) => {
     const trigger = card.querySelector("[data-listen-trigger]");
-    const openButton = card.querySelector("[data-player-open]");
     const status = card.querySelector("[data-listen-status]");
     const listenUrl = card.dataset.listenUrl;
-    const playerSrc = card.dataset.playerSrc;
+    const playerUrl = card.dataset.playerUrl;
 
     if (!trigger || !status) {
       return;
     }
 
     trigger.addEventListener("click", async () => {
-      if (!playerSrc) {
+      if (!playerUrl) {
         status.textContent = "Не удалось подготовить плеер для этой записи.";
         return;
       }
@@ -70,21 +68,12 @@ function initBlindPlayers() {
         console.error("Failed to save listen", error);
       }
 
-      if (hiddenStage) {
-        hiddenStage.hidden = false;
-        hiddenStage.replaceChildren(createPlayerIframe(playerSrc));
+      if (modal && modalFrame) {
+        modalFrame.replaceChildren(createPlayerIframe(playerUrl));
+        modal.showModal();
       }
 
-      if (openButton && modal && modalFrame) {
-        openButton.hidden = false;
-        openButton.onclick = () => {
-          modalFrame.replaceChildren(createPlayerIframe(playerSrc));
-          modal.showModal();
-        };
-      }
-
-      status.textContent =
-        "Запись отправлена на запуск. Если звука нет, откройте запасной плеер.";
+      status.textContent = "Плеер открыт. Прослушивание учтено в статистике.";
 
       window.setTimeout(() => {
         trigger.disabled = false;

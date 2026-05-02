@@ -447,34 +447,10 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function extractIframeSrc(embedHtml) {
-  const html = String(embedHtml || "").trim();
-  if (!html) return "";
-
-  const match = html.match(/<iframe[^>]+src=(["'])(.*?)\1/i);
-  return match?.[2] ? String(match[2]).trim() : "";
-}
-
-function buildAutoplayEmbedSrc(embedHtml) {
-  const iframeSrc = extractIframeSrc(embedHtml);
-  if (!iframeSrc) return "";
-
-  try {
-    const url = new URL(iframeSrc);
-    url.searchParams.set("autoplay", "1");
-    url.searchParams.set("autoPlay", "1");
-    url.searchParams.set("autostart", "1");
-    url.searchParams.set("playsinline", "1");
-    return url.toString();
-  } catch {
-    return iframeSrc;
-  }
-}
-
 function decorateParticipant(participant) {
   return {
     ...participant,
-    blind_player_src: buildAutoplayEmbedSrc(participant.embed_html),
+    has_blind_player: Boolean(String(participant.embed_html || "").trim()),
   };
 }
 
@@ -1346,6 +1322,71 @@ app.post("/auth/logout", (req, res) => {
   req.session.destroy(() => {
     res.redirect("/");
   });
+});
+
+app.get("/polls/:slug/participants/:id/player", ensureUser, (req, res) => {
+  const participantId = Number(req.params.id);
+  const poll = getPollBySlug(req.params.slug);
+
+  if (!poll || !poll.is_active || (!poll.is_visible && !req.session.isAdmin)) {
+    return res.status(404).render("error", {
+      title: "Плеер не найден",
+      message: "Не удалось открыть запись для этого этапа.",
+    });
+  }
+
+  const participant = db
+    .prepare(`
+      SELECT id, embed_html
+      FROM participants
+      WHERE id = ? AND poll_id = ? AND is_active = 1
+    `)
+    .get(participantId, poll.id);
+
+  if (!participant || !String(participant.embed_html || "").trim()) {
+    return res.status(404).render("error", {
+      title: "Плеер не найден",
+      message: "Для этой записи нет доступного плеера.",
+    });
+  }
+
+  res.type("html").send(`<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Плеер записи</title>
+    <style>
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: #0b1219;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        padding: 0;
+      }
+
+      .player-shell {
+        width: 100%;
+        max-width: 100%;
+      }
+
+      .player-shell iframe {
+        display: block;
+        width: 100% !important;
+        min-height: 360px;
+        border: 0;
+        background: #0b1219;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="player-shell">${participant.embed_html}</div>
+  </body>
+</html>`);
 });
 
 app.post("/polls/:slug/participants/:id/listen", ensureUser, (req, res) => {

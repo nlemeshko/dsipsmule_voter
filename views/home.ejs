@@ -93,22 +93,19 @@
             <% votingProgress.participants.forEach((participant, index) => { %>
               <article class="contestant">
                 <div class="contestant-media">
-                  <% if (participant.blind_player_src) { %>
+                  <% if (participant.has_blind_player) { %>
                     <div
                       class="blind-player"
                       data-listen-card
                       data-listen-url="/polls/<%= poll.slug %>/participants/<%= participant.id %>/listen"
-                      data-player-src="<%= participant.blind_player_src %>"
+                      data-player-url="/polls/<%= poll.slug %>/participants/<%= participant.id %>/player"
                     >
                       <span class="blind-player-label">Запись <%= index + 1 %></span>
                       <button class="primary-button blind-play-button" type="button" data-listen-trigger>
                         Play
                       </button>
-                      <button class="ghost-button blind-open-button" type="button" data-player-open hidden>
-                        Открыть плеер
-                      </button>
                       <p class="blind-player-status" data-listen-status>
-                        Нажмите play, чтобы прослушать запись без показа карточки участника.
+                        Нажмите play, чтобы открыть плеер записи без показа карточки участника.
                       </p>
                     </div>
                   <% } else { %>
@@ -141,7 +138,6 @@
           </div>
         <% } %>
       </section>
-      <div class="blind-player-stage" aria-hidden="true" data-player-stage hidden></div>
       <dialog class="blind-player-modal" data-player-modal>
         <div class="blind-player-modal-card">
           <div class="blind-player-modal-topbar">

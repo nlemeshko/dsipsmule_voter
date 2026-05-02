@@ -497,22 +497,6 @@ textarea:focus-visible,
   line-height: 1.2;
 }
 
-.blind-player-stage {
-  position: fixed;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0.01;
-  pointer-events: none;
-  inset: auto auto -10px -10px;
-}
-
-.blind-player-stage iframe {
-  width: 1px;
-  height: 1px;
-  border: 0;
-}
-
 .blind-player-modal {
   width: min(720px, calc(100% - 24px));
   padding: 0;
