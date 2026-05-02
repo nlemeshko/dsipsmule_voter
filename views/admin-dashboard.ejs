@@ -50,7 +50,7 @@
       <section class="admin-grid">
         <article class="panel">
           <h2>Создать голосование</h2>
-          <form class="stack-form" method="post" action="/admin/polls">
+          <form class="stack-form" method="post" action="/admin/polls" enctype="multipart/form-data">
             <label>
               <span>Название</span>
               <input type="text" name="title" required />
@@ -64,8 +64,12 @@
               <textarea name="description" rows="3"></textarea>
             </label>
             <label>
-              <span>Картинка этапа</span>
+              <span>Картинка этапа по ссылке</span>
               <input type="url" name="image_url" placeholder="https://..." />
+            </label>
+            <label>
+              <span>Или загрузите картинку</span>
+              <input type="file" name="image_file" accept=".jpg,.jpeg,.png,.webp,.gif,image/*" />
             </label>
             <label>
               <span>Ссылка редиректа после завершения</span>
@@ -145,6 +149,17 @@
                 <span><%= poll.is_visible ? "Видимость: Видно на главной" : "Видимость: Скрыт с главной" %></span>
                 <span>Статус: <%= poll.is_active ? "Открыт" : "Закрыт" %></span>
               </div>
+              <form class="stack-form" method="post" action="/admin/polls/<%= poll.id %>/update" enctype="multipart/form-data">
+                <label>
+                  <span>Картинка по ссылке</span>
+                  <input type="url" name="image_url" value="<%= poll.image_url || "" %>" placeholder="https://..." />
+                </label>
+                <label>
+                  <span>Или новая загрузка</span>
+                  <input type="file" name="image_file" accept=".jpg,.jpeg,.png,.webp,.gif,image/*" />
+                </label>
+                <button class="ghost-button" type="submit">Сохранить картинку</button>
+              </form>
               <form method="post" action="/admin/polls/<%= poll.id %>/visibility">
                 <button class="ghost-button" type="submit">
                   <%= poll.is_visible ? "Скрыть этап" : "Показать этап" %>

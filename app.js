@@ -26,6 +26,11 @@ const STORAGE_DIR = path.dirname(DB_PATH);
 const MEDIA_DIR = path.join(STORAGE_DIR, "media");
 const TMP_UPLOAD_DIR = path.join(STORAGE_DIR, "tmp-uploads");
 const execFileAsync = promisify(execFile);
+const SMULE_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+const SMULE_DECODE_KEY = decodeBase64String(
+  "TT18WlV5TXVeLXFXYn1WTF5qSmR9TXYpOHklYlFXWGY+SUZCRGNKPiU0emcyQ2l8dGVsamBkVlpA",
+);
 
 fs.mkdirSync(STORAGE_DIR, { recursive: true });
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
@@ -489,6 +494,10 @@ function normalizeMediaSourceUrl(value) {
   return String(value || "").trim();
 }
 
+function decodeBase64String(value) {
+  return Buffer.from(String(value || ""), "base64").toString("latin1");
+}
+
 function detectAudioSourceType(sourceUrl, fallbackType = "") {
   const url = normalizeMediaSourceUrl(sourceUrl).toLowerCase();
   if (fallbackType === "upload") return "upload";
@@ -501,12 +510,33 @@ function participantAudioBaseName(participantId) {
   return `participant-${participantId}`;
 }
 
+function normalizeSmuleSourceUrl(sourceUrl) {
+  const normalizedUrl = normalizeMediaSourceUrl(sourceUrl);
+
+  try {
+    const parsed = new URL(normalizedUrl);
+    if (!/smule\.com$/i.test(parsed.hostname)) {
+      return normalizedUrl;
+    }
+
+    parsed.search = "";
+    parsed.hash = "";
+    parsed.pathname = parsed.pathname.replace(/\/frame(?:\/box)?\/?$/i, "");
+    return parsed.toString();
+  } catch (error) {
+    return normalizedUrl.replace(/[?#].*$/g, "").replace(/\/frame(?:\/box)?\/?$/i, "");
+  }
+}
+
+function pollImageBaseName(pollId) {
+  return `poll-${pollId}`;
+}
+
 function getParticipantAudioAbsolutePath(participantId) {
   return path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}.mp3`);
 }
 
-function clearParticipantAudioFiles(participantId) {
-  const prefix = `${participantAudioBaseName(participantId)}.`;
+function clearFilesByPrefix(prefix) {
   fs.readdirSync(MEDIA_DIR).forEach((fileName) => {
     if (fileName.startsWith(prefix)) {
       fs.rmSync(path.join(MEDIA_DIR, fileName), { force: true });
@@ -514,15 +544,150 @@ function clearParticipantAudioFiles(participantId) {
   });
 }
 
+function clearParticipantAudioFiles(participantId) {
+  clearFilesByPrefix(`${participantAudioBaseName(participantId)}.`);
+}
+
+function clearPollImageFiles(pollId) {
+  clearFilesByPrefix(`${pollImageBaseName(pollId)}.`);
+}
+
 function buildParticipantAudioUrl(audioFilePath) {
   const fileName = path.basename(String(audioFilePath || "").trim());
   return fileName ? `/media/${encodeURIComponent(fileName)}` : "";
+}
+
+function buildPollImageUrl(imagePath) {
+  const normalized = String(imagePath || "").trim();
+  if (!normalized) return "";
+  if (/^https?:\/\//i.test(normalized) || normalized.startsWith("/media/")) {
+    return normalized;
+  }
+
+  const fileName = path.basename(normalized);
+  return fileName ? `/media/${encodeURIComponent(fileName)}` : "";
+}
+
+function savePollImageFile(pollId, file) {
+  const originalName = String(file?.originalname || "").toLowerCase();
+  const extension = path.extname(originalName);
+  const allowedExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+
+  if (!file) {
+    throw new Error("No uploaded image provided.");
+  }
+
+  if (!allowedExtensions.has(extension) && String(file.mimetype || "").indexOf("image/") !== 0) {
+    fs.rmSync(file.path, { force: true });
+    throw new Error("Only JPG, PNG, WEBP, and GIF images are supported.");
+  }
+
+  clearPollImageFiles(pollId);
+
+  const safeExtension = allowedExtensions.has(extension) ? extension : ".jpg";
+  const finalPath = path.join(MEDIA_DIR, `${pollImageBaseName(pollId)}${safeExtension}`);
+  fs.renameSync(file.path, finalPath);
+  return buildPollImageUrl(finalPath);
+}
+
+function extractSmuleEncodedMediaUrl(pageHtml) {
+  const match = String(pageHtml || "").match(/"media_url":"([^"]+)"/);
+  return match ? match[1] : "";
+}
+
+function decodeSmuleMediaUrl(encodedMediaUrl) {
+  const rawValue = String(encodedMediaUrl || "");
+  if (!rawValue.startsWith("e:")) {
+    return rawValue;
+  }
+
+  const input = decodeBase64String(rawValue.slice(2));
+  const key = SMULE_DECODE_KEY;
+  const state = Array.from({ length: 256 }, (_, index) => index);
+  let swapIndex = 0;
+
+  for (let index = 0; index < 256; index += 1) {
+    swapIndex = (swapIndex + state[index] + key.charCodeAt(index % key.length)) % 256;
+    const current = state[index];
+    state[index] = state[swapIndex];
+    state[swapIndex] = current;
+  }
+
+  let i = 0;
+  let j = 0;
+  let decoded = "";
+
+  for (let position = 0; position < input.length; position += 1) {
+    i = (i + 1) % 256;
+    j = (j + state[i]) % 256;
+    const current = state[i];
+    state[i] = state[j];
+    state[j] = current;
+    decoded += String.fromCharCode(input.charCodeAt(position) ^ state[(state[i] + state[j]) % 256]);
+  }
+
+  if (!decoded.startsWith("http")) {
+    throw new Error("Smule returned an unreadable media URL.");
+  }
+
+  return decoded;
+}
+
+async function resolveSmuleAudioUrl(sourceUrl) {
+  const recordingUrl = normalizeSmuleSourceUrl(sourceUrl);
+  const { stdout: pageHtml } = await execFileAsync("curl", [
+    "-s",
+    "-L",
+    "-A",
+    SMULE_USER_AGENT,
+    "--compressed",
+    recordingUrl,
+  ]);
+  const encodedMediaUrl = extractSmuleEncodedMediaUrl(pageHtml);
+
+  if (!encodedMediaUrl) {
+    throw new Error("Smule audio URL was not found on the recording page.");
+  }
+
+  return decodeSmuleMediaUrl(encodedMediaUrl);
+}
+
+async function downloadSmuleAudio(participantId, sourceUrl) {
+  const decodedAudioUrl = await resolveSmuleAudioUrl(sourceUrl);
+  const finalMp3Path = getParticipantAudioAbsolutePath(participantId);
+
+  clearParticipantAudioFiles(participantId);
+
+  await execFileAsync("ffmpeg", [
+    "-y",
+    "-loglevel",
+    "error",
+    "-nostdin",
+    "-i",
+    decodedAudioUrl,
+    "-vn",
+    "-codec:a",
+    "libmp3lame",
+    "-q:a",
+    "2",
+    finalMp3Path,
+  ]);
+
+  if (!fs.existsSync(finalMp3Path)) {
+    throw new Error("Smule audio file was not created.");
+  }
+
+  return finalMp3Path;
 }
 
 async function downloadAudioFromUrl(participantId, sourceUrl) {
   const normalizedUrl = normalizeMediaSourceUrl(sourceUrl);
   const outputTemplate = path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}.%(ext)s`);
   const finalMp3Path = getParticipantAudioAbsolutePath(participantId);
+
+  if (detectAudioSourceType(normalizedUrl) === "smule") {
+    return downloadSmuleAudio(participantId, normalizedUrl);
+  }
 
   clearParticipantAudioFiles(participantId);
 
@@ -607,6 +772,10 @@ function decorateParticipant(participant) {
     embed_html: normalizeEmbedHtml(participant.embed_html),
     audio_url: buildParticipantAudioUrl(participant.audio_file_path),
   };
+}
+
+function resolvePollImageUrl(imageUrl) {
+  return buildPollImageUrl(imageUrl);
 }
 
 function canViewPollReport(poll, isAdmin) {
@@ -748,11 +917,12 @@ function getPolls() {
       FROM polls
       ORDER BY created_at ASC, id ASC
     `)
-    .all();
+    .all()
+    .map((poll) => ({ ...poll, image_url: resolvePollImageUrl(poll.image_url) }));
 }
 
 function getPollBySlug(slug) {
-  return db
+  const poll = db
     .prepare(`
       SELECT id, title, slug, description, redirect_url, is_visible, is_active
       , image_url
@@ -760,6 +930,8 @@ function getPollBySlug(slug) {
       WHERE slug = ?
     `)
     .get(slug);
+
+  return poll ? { ...poll, image_url: resolvePollImageUrl(poll.image_url) } : null;
 }
 
 function getActiveParticipants(pollId) {
@@ -1744,7 +1916,7 @@ app.get("/admin", ensureAdmin, (req, res) => {
   });
 });
 
-app.post("/admin/polls", ensureAdmin, (req, res) => {
+app.post("/admin/polls", ensureAdmin, upload.single("image_file"), (req, res) => {
   const title = String(req.body.title || "").trim();
   const slugInput = String(req.body.slug || "").trim();
   const description = String(req.body.description || "").trim();
@@ -1762,12 +1934,71 @@ app.post("/admin/polls", ensureAdmin, (req, res) => {
   }
 
   const timestamp = nowIso();
-  db.prepare(`
+  const result = db.prepare(`
     INSERT INTO polls (title, slug, description, image_url, redirect_url, is_visible, is_active, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)
   `).run(title, slug, description, imageUrl, redirectUrl, timestamp, timestamp);
 
+  const pollId = Number(result.lastInsertRowid);
+
+  try {
+    if (req.file) {
+      const localImageUrl = savePollImageFile(pollId, req.file);
+      db.prepare("UPDATE polls SET image_url = ?, updated_at = ? WHERE id = ?").run(
+        localImageUrl,
+        nowIso(),
+        pollId,
+      );
+    }
+  } catch (error) {
+    clearPollImageFiles(pollId);
+    db.prepare("DELETE FROM polls WHERE id = ?").run(pollId);
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    return res.status(400).render("error", {
+      title: "Ошибка картинки этапа",
+      message: error.message || "Не удалось сохранить картинку этапа.",
+    });
+  }
+
   res.redirect("/admin");
+});
+
+app.post("/admin/polls/:id/update", ensureAdmin, upload.single("image_file"), (req, res) => {
+  const pollId = Number(req.params.id);
+  const poll = db.prepare("SELECT id FROM polls WHERE id = ?").get(pollId);
+  const imageUrl = String(req.body.image_url || "").trim();
+
+  if (!poll) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    return res.redirect("/admin");
+  }
+
+  try {
+    let nextImageUrl = imageUrl;
+
+    if (req.file) {
+      nextImageUrl = savePollImageFile(pollId, req.file);
+    }
+
+    db.prepare("UPDATE polls SET image_url = ?, updated_at = ? WHERE id = ?").run(
+      nextImageUrl,
+      nowIso(),
+      pollId,
+    );
+    res.redirect("/admin");
+  } catch (error) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    res.status(400).render("error", {
+      title: "Ошибка обновления картинки",
+      message: error.message || "Не удалось обновить картинку этапа.",
+    });
+  }
 });
 
 app.post("/admin/polls/:id/visibility", ensureAdmin, (req, res) => {
@@ -1821,6 +2052,7 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
     participantsToDelete.forEach((participant) => {
       clearParticipantAudioFiles(participant.id);
     });
+    clearPollImageFiles(pollId);
     db.prepare("DELETE FROM participant_listens WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM votes WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM user_poll_progress WHERE poll_id = ?").run(pollId);
