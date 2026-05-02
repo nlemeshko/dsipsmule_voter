@@ -224,12 +224,11 @@ function ensureDefaultPoll() {
   const timestamp = nowIso();
   const result = db.prepare(`
     INSERT INTO polls (title, slug, description, redirect_url, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+    VALUES (?, ?, ?, ?, 1, ?, ?)
   `).run(
     "Этап 1",
     "stage-1",
     "Первое голосование",
-    "",
     "https://dsipsmule.one",
     timestamp,
     timestamp,
