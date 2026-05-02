@@ -611,7 +611,31 @@ function savePollImageFile(pollId, file) {
 }
 
 function extractSmuleEncodedMediaUrl(pageHtml) {
-  const match = String(pageHtml || "").match(/"media_url":"([^"]+)"/);
+  const rawHtml = String(pageHtml || "");
+  const patterns = [
+    /"media_url":"([^"]+)"/,
+    /\\"media_url\\":\\"([^"]+)\\"/,
+    /&quot;media_url&quot;:&quot;([^"&]+)&quot;/,
+    /media_url["']?\s*:\s*["']([^"']+)["']/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = rawHtml.match(pattern);
+    if (match && match[1]) {
+      return match[1]
+        .replace(/&quot;/g, '"')
+        .replace(/&#34;/g, '"')
+        .replace(/&amp;/g, "&")
+        .replace(/\\"/g, '"');
+    }
+  }
+
+  return "";
+}
+
+function extractSmulePerformanceKey(sourceUrl) {
+  const normalizedUrl = normalizeSmuleSourceUrl(sourceUrl);
+  const match = normalizedUrl.match(/\/(\d+_\d+)(?:$|[/?#])/);
   return match ? match[1] : "";
 }
 
@@ -663,10 +687,36 @@ async function resolveSmuleAudioUrl(sourceUrl) {
     "--compressed",
     recordingUrl,
   ]);
-  const encodedMediaUrl = extractSmuleEncodedMediaUrl(pageHtml);
+  let encodedMediaUrl = extractSmuleEncodedMediaUrl(pageHtml);
 
   if (!encodedMediaUrl) {
-    throw new Error("Smule audio URL was not found on the recording page.");
+    const performanceKey = extractSmulePerformanceKey(recordingUrl);
+
+    if (performanceKey) {
+      const { stdout: apiResponse } = await execFileAsync("curl", [
+        "-s",
+        "-L",
+        "-A",
+        SMULE_USER_AGENT,
+        "--compressed",
+        "-H",
+        "accept: application/json,text/plain,*/*",
+        "-H",
+        `referer: ${recordingUrl}`,
+        `https://www.smule.com/api/performance/${performanceKey}`,
+      ]);
+
+      try {
+        const payload = JSON.parse(apiResponse);
+        encodedMediaUrl = String(payload?.media_url || payload?.performance?.media_url || "").trim();
+      } catch (error) {
+        encodedMediaUrl = "";
+      }
+    }
+  }
+
+  if (!encodedMediaUrl) {
+    throw new Error("Smule audio URL was not found on the recording page or API response.");
   }
 
   return decodeSmuleMediaUrl(encodedMediaUrl);
