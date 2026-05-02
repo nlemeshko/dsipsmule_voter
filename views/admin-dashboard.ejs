@@ -103,6 +103,9 @@
 
         <article class="panel">
           <h2>Добавить участника</h2>
+          <% if (registrationsError) { %>
+            <div class="notice notice-error"><%= registrationsError %></div>
+          <% } %>
           <form class="stack-form" method="post" action="/admin/participants">
             <label>
               <span>Голосование</span>
@@ -114,12 +117,23 @@
               </select>
             </label>
             <label>
-              <span>Имя участника</span>
-              <input type="text" name="name" required />
+              <span>Участник из регистраций</span>
+              <select name="registration_key" required>
+                <option value="">Выберите участника</option>
+                <% registrations.forEach((registration) => { %>
+                  <option value="<%= registration.key %>">
+                    <%= registration.participants %> · <%= registration.category_name %><%= registration.telegram_username ? ` · @${registration.telegram_username}` : "" %>
+                  </option>
+                <% }) %>
+              </select>
             </label>
             <label>
               <span>Прямая аудиоссылка</span>
               <textarea name="embed_html" rows="4" placeholder="https://.../track.m4a или https://.../track.mp3" required></textarea>
+            </label>
+            <label>
+              <span>Название песни</span>
+              <input type="text" name="song_title" placeholder="Введите название песни" />
             </label>
             <div class="participant-source-actions">
               <button class="primary-button" type="submit">Сохранить источник</button>
@@ -212,7 +226,19 @@
                       <% poll.participants.forEach((participant) => { %>
                         <tr>
                           <td class="participant-name-cell">
-                            <strong><%= participant.name %></strong>
+                            <div class="participant-identity">
+                              <% if (participant.image_url) { %>
+                                <img class="participant-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" />
+                              <% } else { %>
+                                <span class="participant-avatar participant-avatar-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                              <% } %>
+                              <div class="participant-copy">
+                                <strong><%= participant.name %></strong>
+                                <% if (participant.description) { %>
+                                  <span class="participant-song-title"><%= participant.description %></span>
+                                <% } %>
+                              </div>
+                            </div>
                             <% if (participant.witcher_choice) { %>
                               <span class="admin-witcher-choice">Выбор Ведьмака</span>
                             <% } %>
@@ -308,12 +334,26 @@
                           <td class="participant-edit-cell">
                             <form class="stack-form participant-edit-form" method="post" action="/admin/participants/<%= participant.id %>/update">
                               <label>
-                                <span>Имя участника</span>
-                                <input type="text" name="name" value="<%= participant.name %>" required />
+                                <span>Участник из регистраций</span>
+                                <select name="registration_key" required>
+                                  <option value="">Выберите участника</option>
+                                  <% if (!participantRegistrationKeys[participant.id]) { %>
+                                    <option value="" selected><%= participant.name %> · текущий участник не найден в CSV</option>
+                                  <% } %>
+                                  <% registrations.forEach((registration) => { %>
+                                    <option value="<%= registration.key %>" <%= participantRegistrationKeys[participant.id] === registration.key ? "selected" : "" %>>
+                                      <%= registration.participants %> · <%= registration.category_name %><%= registration.telegram_username ? ` · @${registration.telegram_username}` : "" %>
+                                    </option>
+                                  <% }) %>
+                                </select>
                               </label>
                               <label>
                                 <span>Новая прямая аудиоссылка</span>
                                 <textarea name="embed_html" rows="4" placeholder="https://.../track.m4a или https://.../track.mp3"><%= participant.audio_source_url || "" %></textarea>
+                              </label>
+                              <label>
+                                <span>Название песни</span>
+                                <input type="text" name="song_title" value="<%= participant.description || "" %>" placeholder="Введите название песни" />
                               </label>
                               <div class="participant-source-actions">
                                 <button class="primary-button" type="submit">Сохранить изменения</button>
@@ -359,7 +399,7 @@
                 <th>Первый вход</th>
                 <th>Последний вход</th>
                 <th>Входов</th>
-                <th>Голоса</th>
+                <th>Сброс голосов</th>
               </tr>
             </thead>
             <tbody>
@@ -379,7 +419,7 @@
                   <td><%= user.login_count %></td>
                   <td>
                     <form method="post" action="/admin/users/<%= user.id %>/reset-votes">
-                      <button class="ghost-button danger-button" type="submit">Сбросить</button>
+                      <button class="ghost-button danger-button" type="submit">Сбросить голоса</button>
                     </form>
                   </td>
                 </tr>
@@ -391,33 +431,49 @@
 
       <section class="panel">
         <h2>Последние голоса</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Когда</th>
-                <th>Telegram ID</th>
-                <th>Имя</th>
-                <th>Username</th>
-                <th>Выбрал</th>
-                <th>Против</th>
-                <th>Этап</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% recentVotes.forEach((vote) => { %>
-                <tr>
-                  <td><%= formatDate(vote.created_at) %></td>
-                  <td><%= vote.telegram_id %></td>
-                  <td><%= vote.full_name || "—" %></td>
-                  <td><%= vote.username ? `@${vote.username}` : "—" %></td>
-                  <td><%= vote.winner_name %></td>
-                  <td><%= vote.loser_name %></td>
-                  <td><%= vote.poll_title %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
+        <div class="stack-list">
+          <% recentVotes.forEach((userVotes) => { %>
+            <details class="participant-votes vote-user-group">
+              <summary>
+                <strong><%= userVotes.full_name || "—" %></strong>
+                <span>
+                  <%= userVotes.username ? `@${userVotes.username}` : "без username" %>
+                  · Telegram ID: <%= userVotes.telegram_id %>
+                </span>
+                <span>
+                  Последний голос: <%= formatDate(userVotes.last_vote_at) %>
+                  · Всего голосов: <%= userVotes.votes.length %>
+                </span>
+              </summary>
+              <div class="vote-user-summary-actions">
+                <form method="post" action="/admin/users/<%= userVotes.user_id %>/reset-votes">
+                  <button class="ghost-button danger-button" type="submit">Сбросить голоса пользователя</button>
+                </form>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Когда</th>
+                      <th>Выбрал</th>
+                      <th>Против</th>
+                      <th>Этап</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% userVotes.votes.forEach((vote) => { %>
+                      <tr>
+                        <td><%= formatDate(vote.created_at) %></td>
+                        <td><%= vote.winner_name %></td>
+                        <td><%= vote.loser_name %></td>
+                        <td><%= vote.poll_title %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          <% }) %>
         </div>
       </section>
       <footer class="site-footer">

@@ -90,11 +90,21 @@
             </form>
           <% } %>
           <section class="duel <%= votingProgress.stageType === 'triple' ? 'duel-triple' : '' %>">
-            <% votingProgress.participants.forEach((participant, index) => { %>
+            <% votingProgress.participants.forEach((participant) => { %>
+              <% const artHueA = Math.floor(Math.random() * 360); %>
+              <% const artHueB = Math.floor(Math.random() * 360); %>
+              <% const artHueC = Math.floor(Math.random() * 360); %>
+              <% const artRotate = Math.floor(Math.random() * 29) - 14; %>
               <article class="contestant">
                 <div class="contestant-media">
                   <% if (participant.playback_url) { %>
-                    <div class="audio-entry">
+                    <div
+                      class="audio-entry"
+                      style="--art-hue-a: <%= artHueA %>; --art-hue-b: <%= artHueB %>; --art-hue-c: <%= artHueC %>; --art-rotate: <%= artRotate %>deg;"
+                    >
+                      <div class="audio-art" aria-hidden="true">
+                        <div class="audio-art-square"></div>
+                      </div>
                       <span class="audio-entry-label">Аудио участника</span>
                       <audio
                         class="audio-player"
@@ -108,9 +118,6 @@
                   <% } else { %>
                     <div class="notice">Аудиоссылка для этой записи еще не добавлена.</div>
                   <% } %>
-                </div>
-                <div class="contestant-copy">
-                  <h2><%= participant.name %></h2>
                 </div>
                 <form method="post" action="/vote">
                   <input type="hidden" name="poll_id" value="<%= poll.id %>" />

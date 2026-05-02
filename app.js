@@ -18,15 +18,24 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
 const SESSION_SECRET =
   process.env.SESSION_SECRET || "replace-this-with-a-long-random-secret";
+const REGISTRATIONS_CSV_URL =
+  process.env.REGISTRATIONS_CSV_URL ||
+  "https://nbg1.your-objectstorage.com/nassal2026/registrations/nassal2026_registrations.csv";
 const DB_PATH =
   process.env.DB_PATH || path.join(__dirname, "storage", "voting.sqlite");
 const STORAGE_DIR = path.dirname(DB_PATH);
 const MEDIA_DIR = path.join(STORAGE_DIR, "media");
 const TMP_UPLOAD_DIR = path.join(STORAGE_DIR, "tmp-uploads");
+const REGISTRATIONS_CACHE_TTL_MS = 1000 * 60 * 5;
 
 fs.mkdirSync(STORAGE_DIR, { recursive: true });
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
 fs.mkdirSync(TMP_UPLOAD_DIR, { recursive: true });
+
+const registrationsCache = {
+  loadedAt: 0,
+  entries: [],
+};
 
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
@@ -535,6 +544,130 @@ function buildPollImageUrl(imagePath) {
   return fileName ? `/media/${encodeURIComponent(fileName)}` : "";
 }
 
+function parseCsvLine(line) {
+  const result = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+
+    if (char === "\"") {
+      if (inQuotes && next === "\"") {
+        current += "\"";
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  result.push(current);
+  return result.map((value) => String(value || "").replace(/\r/g, "").trim());
+}
+
+function buildRegistrationKey(entry) {
+  return Buffer.from(
+    JSON.stringify({
+      registered_at_utc: entry.registered_at_utc,
+      telegram_user_id: entry.telegram_user_id,
+      participants: entry.participants,
+    }),
+  ).toString("base64url");
+}
+
+async function loadRegistrationsCatalog(force = false) {
+  const cacheIsFresh =
+    !force &&
+    registrationsCache.loadedAt &&
+    Date.now() - registrationsCache.loadedAt < REGISTRATIONS_CACHE_TTL_MS &&
+    registrationsCache.entries.length > 0;
+
+  if (cacheIsFresh) {
+    return registrationsCache.entries;
+  }
+
+  const response = await fetch(REGISTRATIONS_CSV_URL);
+  if (!response.ok) {
+    throw new Error(`Не удалось загрузить CSV регистраций: ${response.status}`);
+  }
+
+  const rawCsv = await response.text();
+  const lines = rawCsv
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+
+  if (lines.length <= 1) {
+    registrationsCache.entries = [];
+    registrationsCache.loadedAt = Date.now();
+    return registrationsCache.entries;
+  }
+
+  const headers = parseCsvLine(lines[0]);
+  const entries = lines
+    .slice(1)
+    .map((line) => {
+      const values = parseCsvLine(line);
+      const row = {};
+
+      headers.forEach((header, index) => {
+        row[header] = values[index] || "";
+      });
+
+      return {
+        registered_at_utc: row.registered_at_utc || "",
+        telegram_user_id: row.telegram_user_id || "",
+        telegram_username: row.telegram_username || "",
+        telegram_full_name: row.telegram_full_name || "",
+        participants: row.participants || "",
+        category_code: row.category_code || "",
+        category_name: row.category_name || "",
+        avatar_url: row.avatar_url || "",
+      };
+    })
+    .filter((entry) => entry.participants)
+    .map((entry) => ({
+      ...entry,
+      key: buildRegistrationKey(entry),
+    }))
+    .sort((left, right) => {
+      const categoryCompare = String(left.category_name || "").localeCompare(String(right.category_name || ""), "ru");
+      if (categoryCompare !== 0) return categoryCompare;
+      return String(left.participants || "").localeCompare(String(right.participants || ""), "ru");
+    });
+
+  registrationsCache.entries = entries;
+  registrationsCache.loadedAt = Date.now();
+  return registrationsCache.entries;
+}
+
+function findRegistrationForParticipant(participant, registrations) {
+  const name = String(participant?.name || "").trim();
+  const avatarUrl = String(participant?.image_url || "").trim();
+
+  return registrations.find(
+    (entry) =>
+      String(entry.participants || "").trim() === name &&
+      String(entry.avatar_url || "").trim() === avatarUrl,
+  ) || null;
+}
+
+function resolveRegistrationByKey(registrationKey, registrations) {
+  const key = String(registrationKey || "").trim();
+  return registrations.find((entry) => entry.key === key) || null;
+}
+
 function savePollImageFile(pollId, file) {
   const originalName = String(file?.originalname || "").toLowerCase();
   const extension = path.extname(originalName);
@@ -564,6 +697,7 @@ function decorateParticipant(participant) {
 
   return {
     ...participant,
+    image_url: resolvePollImageUrl(participant.image_url),
     embed_html: "",
     audio_url: buildParticipantAudioUrl(participant.audio_file_path),
     playback_url: directAudioUrl || buildParticipantAudioUrl(participant.audio_file_path),
@@ -585,6 +719,7 @@ function renderPollReportExcel(report) {
         <tr>
           <td>${index + 1}</td>
           <td>${escapeHtml(participant.name)}</td>
+          <td>${escapeHtml(participant.description || "")}</td>
           <td>${participant.voteCount}</td>
           <td>${participant.uniqueVoterCount}</td>
           <td>${participant.listenCount}</td>
@@ -638,6 +773,7 @@ function renderPollReportExcel(report) {
       <tr>
         <th>#</th>
         <th>Участник</th>
+        <th>Песня</th>
         <th>Голосов</th>
         <th>Людей</th>
         <th>Прослушиваний</th>
@@ -1030,12 +1166,13 @@ function adminStats() {
     `)
     .all();
 
-  const recentVotes = db
+  const recentVoteRows = db
     .prepare(`
       SELECT
         v.id,
         v.created_at,
         poll.title AS poll_title,
+        tu.id AS user_id,
         tu.telegram_id,
         tu.full_name,
         tu.username,
@@ -1051,6 +1188,28 @@ function adminStats() {
       LIMIT 100
     `)
     .all();
+
+  const recentVotes = Array.from(
+    recentVoteRows.reduce((groups, vote) => {
+      const current = groups.get(vote.user_id) || {
+        user_id: vote.user_id,
+        telegram_id: vote.telegram_id,
+        full_name: vote.full_name,
+        username: vote.username,
+        last_vote_at: vote.created_at,
+        votes: [],
+      };
+
+      current.votes.push(vote);
+
+      if (!current.last_vote_at || new Date(vote.created_at).getTime() > new Date(current.last_vote_at).getTime()) {
+        current.last_vote_at = vote.created_at;
+      }
+
+      groups.set(vote.user_id, current);
+      return groups;
+    }, new Map()).values(),
+  ).sort((left, right) => new Date(right.last_vote_at).getTime() - new Date(left.last_vote_at).getTime());
 
   const recentUsers = db
     .prepare(`
@@ -1699,12 +1858,39 @@ app.post("/admin/logout", ensureAdmin, (req, res) => {
   res.redirect("/admin/login");
 });
 
-app.get("/admin", ensureAdmin, (req, res) => {
-  res.render("admin-dashboard", {
-    ...adminStats(),
-    formatDate,
-    baseUrl: BASE_URL,
-  });
+app.get("/admin", ensureAdmin, async (req, res) => {
+  try {
+    const registrations = await loadRegistrationsCatalog();
+    const stats = adminStats();
+    const participantRegistrationKeys = {};
+
+    stats.pollsWithParticipants.forEach((poll) => {
+      poll.participants.forEach((participant) => {
+        const match = findRegistrationForParticipant(participant, registrations);
+        if (match) {
+          participantRegistrationKeys[participant.id] = match.key;
+        }
+      });
+    });
+
+    res.render("admin-dashboard", {
+      ...stats,
+      formatDate,
+      baseUrl: BASE_URL,
+      registrations,
+      participantRegistrationKeys,
+      registrationsError: null,
+    });
+  } catch (error) {
+    res.render("admin-dashboard", {
+      ...adminStats(),
+      formatDate,
+      baseUrl: BASE_URL,
+      registrations: [],
+      participantRegistrationKeys: {},
+      registrationsError: error.message || "Не удалось загрузить список регистраций.",
+    });
+  }
 });
 
 app.post("/admin/polls", ensureAdmin, upload.single("image_file"), (req, res) => {
@@ -1855,20 +2041,38 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
   res.redirect("/admin");
 });
 
-app.post("/admin/participants", ensureAdmin, (req, res) => {
+app.post("/admin/participants", ensureAdmin, async (req, res) => {
   const pollId = Number(req.body.poll_id);
-  const name = String(req.body.name || "").trim();
+  const registrationKey = String(req.body.registration_key || "").trim();
   const embedHtml = String(req.body.embed_html || "").trim();
+  const songTitle = String(req.body.song_title || "").trim();
 
-  if (!pollId || !name || !embedHtml) {
+  if (!pollId || !registrationKey || !embedHtml) {
     return res.redirect("/admin");
+  }
+
+  let registration;
+  try {
+    registration = resolveRegistrationByKey(registrationKey, await loadRegistrationsCatalog());
+  } catch (error) {
+    return res.status(400).render("error", {
+      title: "Ошибка загрузки регистраций",
+      message: error.message || "Не удалось загрузить список зарегистрированных участников.",
+    });
+  }
+
+  if (!registration) {
+    return res.status(400).render("error", {
+      title: "Участник не найден",
+      message: "Выберите участника из списка регистраций.",
+    });
   }
 
   const timestamp = nowIso();
   const result = db.prepare(`
     INSERT INTO participants (poll_id, name, description, image_url, embed_html, audio_file_path, audio_source_url, audio_source_type, is_active, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-  `).run(pollId, name, "", "", "", "", "", "", timestamp, timestamp);
+  `).run(pollId, registration.participants, songTitle, registration.avatar_url, "", "", "", "", timestamp, timestamp);
 
   const participantId = Number(result.lastInsertRowid);
 
@@ -1885,24 +2089,42 @@ app.post("/admin/participants", ensureAdmin, (req, res) => {
   }
 });
 
-app.post("/admin/participants/:id/update", ensureAdmin, (req, res) => {
+app.post("/admin/participants/:id/update", ensureAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const name = String(req.body.name || "").trim();
+  const registrationKey = String(req.body.registration_key || "").trim();
   const embedHtml = String(req.body.embed_html || "").trim();
+  const songTitle = String(req.body.song_title || "").trim();
 
   const participant = db
     .prepare("SELECT id FROM participants WHERE id = ?")
     .get(id);
 
-  if (!participant || !name) {
+  if (!participant || !registrationKey) {
     return res.redirect("/admin");
+  }
+
+  let registration;
+  try {
+    registration = resolveRegistrationByKey(registrationKey, await loadRegistrationsCatalog());
+  } catch (error) {
+    return res.status(400).render("error", {
+      title: "Ошибка загрузки регистраций",
+      message: error.message || "Не удалось загрузить список зарегистрированных участников.",
+    });
+  }
+
+  if (!registration) {
+    return res.status(400).render("error", {
+      title: "Участник не найден",
+      message: "Выберите участника из списка регистраций.",
+    });
   }
 
   db.prepare(`
     UPDATE participants
-    SET name = ?, updated_at = ?
+    SET name = ?, description = ?, image_url = ?, updated_at = ?
     WHERE id = ?
-  `).run(name, nowIso(), id);
+  `).run(registration.participants, songTitle, registration.avatar_url, nowIso(), id);
 
   if (!embedHtml) {
     return res.redirect("/admin");

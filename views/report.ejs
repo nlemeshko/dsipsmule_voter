@@ -63,8 +63,16 @@
               <summary class="poll-group-summary">
                 <div class="report-participant-heading">
                   <span class="report-place-badge<%= currentPlace <= 3 ? ` report-place-${currentPlace}` : '' %>">#<%= currentPlace %></span>
+                  <% if (participant.image_url) { %>
+                    <img class="report-participant-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" />
+                  <% } else { %>
+                    <span class="report-participant-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                  <% } %>
                   <div class="report-participant-copy">
                     <strong class="report-participant-title"><span><%= participant.name %></span></strong>
+                    <% if (participant.description) { %>
+                      <span class="report-participant-song"><%= participant.description %></span>
+                    <% } %>
                     <span class="report-participant-meta">
                       <span class="report-votes-metric">
                         <span class="report-votes-label">Голосов:</span>
