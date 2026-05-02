@@ -26,7 +26,6 @@ const STORAGE_DIR = path.dirname(DB_PATH);
 const MEDIA_DIR = path.join(STORAGE_DIR, "media");
 const TMP_UPLOAD_DIR = path.join(STORAGE_DIR, "tmp-uploads");
 const execFileAsync = promisify(execFile);
-const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const SMULE_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 const SMULE_DECODE_KEY = decodeBase64String(
@@ -665,27 +664,11 @@ function buildSmuleLookupUrls(sourceUrl) {
   const performanceKey = extractSmulePerformanceKey(recordingUrl);
   const urls = [recordingUrl];
 
-  if (!/\/frame\/box(?:$|[?#])/i.test(recordingUrl)) {
-    urls.push(`${recordingUrl.replace(/\/+$/g, "")}/frame/box`);
-  }
-
   if (performanceKey) {
-    urls.push(`https://www.smule.com/sing-recording/${performanceKey}`);
-    urls.push(`https://www.smule.com/p/${performanceKey}`);
-    urls.push(`https://www.smule.com/c/${performanceKey}`);
     urls.unshift(`https://www.smule.com/api/performance/${performanceKey}`);
   }
 
   return Array.from(new Set(urls));
-}
-
-function buildSmuleFrameUrls(sourceUrl) {
-  const recordingUrl = normalizeSmuleSourceUrl(sourceUrl).replace(/\/+$/g, "");
-  return [`${recordingUrl}/frame`, `${recordingUrl}/frame/box`];
-}
-
-function isDirectM4aUrl(url) {
-  return /https:\/\/[^"'\\\s]+\.m4a(?:\?[^"'\\\s]*)?$/i.test(String(url || "").trim());
 }
 
 function decodeSmuleMediaUrl(encodedMediaUrl) {
@@ -726,144 +709,43 @@ function decodeSmuleMediaUrl(encodedMediaUrl) {
   return decoded;
 }
 
-async function resolveSmuleAudioUrlFromFrame(sourceUrl) {
-  let chromiumLib;
-
-  try {
-    chromiumLib = require("playwright-core");
-  } catch (error) {
-    return "";
-  }
-
-  const { chromium } = chromiumLib;
-  const frameUrls = buildSmuleFrameUrls(sourceUrl);
-  let browser;
-
-  try {
-    browser = await chromium.launch({
-      headless: true,
-      executablePath: CHROMIUM_EXECUTABLE_PATH,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-      ],
-    });
-
-    const context = await browser.newContext({
-      userAgent: SMULE_USER_AGENT,
-    });
-
-    for (const frameUrl of frameUrls) {
-      const page = await context.newPage();
-      let directAudioUrl = "";
-      const captureUrl = (candidateUrl) => {
-        if (!directAudioUrl && isDirectM4aUrl(candidateUrl)) {
-          directAudioUrl = String(candidateUrl).trim();
-        }
-      };
-
-      page.on("request", (request) => captureUrl(request.url()));
-      page.on("response", (response) => captureUrl(response.url()));
-
-      try {
-        await page.goto(frameUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-        await page.waitForTimeout(5000);
-        await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
-      } catch (error) {
-        // Try the next frame URL below.
-      }
-
-      if (!directAudioUrl) {
-        const resourceUrls = await page.evaluate(() => {
-          return performance
-            .getEntriesByType("resource")
-            .map((entry) => entry && entry.name)
-            .filter(Boolean);
-        }).catch(() => []);
-
-        for (const resourceUrl of resourceUrls) {
-          captureUrl(resourceUrl);
-          if (directAudioUrl) {
-            break;
-          }
-        }
-      }
-
-      await page.close().catch(() => {});
-
-      if (directAudioUrl) {
-        await context.close().catch(() => {});
-        return directAudioUrl;
-      }
-    }
-
-    await context.close().catch(() => {});
-  } finally {
-    if (browser) {
-      await browser.close().catch(() => {});
-    }
-  }
-
-  return "";
-}
-
 async function resolveSmuleAudioUrl(sourceUrl) {
   const recordingUrl = normalizeSmuleSourceUrl(sourceUrl);
-  const frameAudioUrl = await resolveSmuleAudioUrlFromFrame(recordingUrl);
-  if (frameAudioUrl) {
-    return frameAudioUrl;
+  const performanceKey = extractSmulePerformanceKey(recordingUrl);
+  if (!performanceKey) {
+    throw new Error("Smule performance key was not found in the provided URL.");
   }
 
-  const lookupUrls = buildSmuleLookupUrls(recordingUrl);
-  let directAudioUrl = "";
-  let encodedMediaUrl = "";
+  const { stdout } = await execFileAsync("curl", [
+    "-s",
+    "-L",
+    "-A",
+    SMULE_USER_AGENT,
+    "--compressed",
+    "-H",
+    "accept: application/json,text/plain,*/*",
+    "-H",
+    `referer: ${recordingUrl}`,
+    `https://www.smule.com/api/performance/${performanceKey}`,
+  ]);
 
-  for (const lookupUrl of lookupUrls) {
-    const { stdout } = await execFileAsync("curl", [
-      "-s",
-      "-L",
-      "-A",
-      SMULE_USER_AGENT,
-      "--compressed",
-      "-H",
-      "accept: application/json,text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "-H",
-      "accept-language: en-US,en;q=0.9",
-      "-H",
-      `referer: ${recordingUrl}`,
-      lookupUrl,
-    ]);
+  const directAudioUrl = extractSmuleDirectAudioUrl(stdout);
+  if (directAudioUrl) {
+    return directAudioUrl;
+  }
 
-    directAudioUrl = extractSmuleDirectAudioUrl(stdout);
-    if (directAudioUrl) {
-      return directAudioUrl;
-    }
-
-    encodedMediaUrl = extractSmuleEncodedMediaUrl(stdout);
-    if (encodedMediaUrl) {
-      break;
-    }
-
+  let encodedMediaUrl = extractSmuleEncodedMediaUrl(stdout);
+  if (!encodedMediaUrl) {
     try {
       const payload = JSON.parse(stdout);
-      directAudioUrl = extractSmuleDirectAudioUrl(JSON.stringify(payload));
-      if (directAudioUrl) {
-        return directAudioUrl;
-      }
       encodedMediaUrl = String(payload?.media_url || payload?.performance?.media_url || "").trim();
     } catch (error) {
       encodedMediaUrl = "";
     }
-
-    if (encodedMediaUrl) {
-      break;
-    }
   }
 
   if (!encodedMediaUrl) {
-    throw new Error("Smule audio URL was not found on the recording page or API response.");
+    throw new Error("Smule audio URL was not found in the API response.");
   }
 
   return decodeSmuleMediaUrl(encodedMediaUrl);
