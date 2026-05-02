@@ -97,6 +97,7 @@ db.exec(`
     voter_user_id INTEGER NOT NULL,
     winner_participant_id INTEGER NOT NULL,
     loser_participant_id INTEGER NOT NULL,
+    loser_participant_ids_json TEXT,
     ip_address TEXT,
     user_agent TEXT,
     created_at TEXT NOT NULL,
@@ -151,12 +152,21 @@ const pollColumns = db
   .all()
   .map((column) => column.name);
 
+const voteColumns = db
+  .prepare("PRAGMA table_info(votes)")
+  .all()
+  .map((column) => column.name);
+
 if (!pollColumns.includes("is_visible")) {
   db.exec("ALTER TABLE polls ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1");
 }
 
 if (!pollColumns.includes("image_url")) {
   db.exec("ALTER TABLE polls ADD COLUMN image_url TEXT");
+}
+
+if (!voteColumns.includes("loser_participant_ids_json")) {
+  db.exec("ALTER TABLE votes ADD COLUMN loser_participant_ids_json TEXT");
 }
 
 if (!participantColumns.includes("embed_html")) {
@@ -199,11 +209,6 @@ if (!userColumns.includes("voting_completed_at")) {
 if (!userColumns.includes("final_winner_participant_id")) {
   db.exec("ALTER TABLE telegram_users ADD COLUMN final_winner_participant_id INTEGER");
 }
-
-const voteColumns = db
-  .prepare("PRAGMA table_info(votes)")
-  .all()
-  .map((column) => column.name);
 
 if (!voteColumns.includes("poll_id")) {
   db.exec("ALTER TABLE votes ADD COLUMN poll_id INTEGER");
@@ -971,6 +976,26 @@ function ensureCurrentChoices(state) {
   return normalized;
 }
 
+function parseLoserIds(rawValue, fallbackLoserId) {
+  let parsed = [];
+
+  try {
+    parsed = JSON.parse(String(rawValue || "[]"));
+  } catch {
+    parsed = [];
+  }
+
+  const normalized = Array.isArray(parsed)
+    ? parsed.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+    : [];
+
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  return Number(fallbackLoserId) > 0 ? [Number(fallbackLoserId)] : [];
+}
+
 function getOrCreateUserPollProgress(userId, pollId) {
   const existing = db
     .prepare(`
@@ -1096,20 +1121,44 @@ function getPollReportData(pollId) {
         v.id,
         v.winner_participant_id,
         v.loser_participant_id,
+        v.loser_participant_ids_json,
         v.created_at,
         tu.telegram_id,
         tu.full_name,
         tu.username,
-        tu.photo_url,
-        loser.name AS loser_name
+        tu.photo_url
       FROM votes v
       JOIN telegram_users tu ON tu.id = v.voter_user_id
-      JOIN participants loser ON loser.id = v.loser_participant_id
       WHERE v.poll_id = ?
         AND ${completedVotesFilter("v")}
       ORDER BY v.created_at DESC
     `)
     .all(pollId);
+
+  const loserIds = Array.from(
+    new Set(
+      voteRows.flatMap((row) => parseLoserIds(row.loser_participant_ids_json, row.loser_participant_id)),
+    ),
+  );
+  const loserNameById = new Map(
+    (loserIds.length
+      ? db
+          .prepare(`SELECT id, name FROM participants WHERE id IN (${loserIds.map(() => "?").join(", ")})`)
+          .all(...loserIds)
+      : []
+    ).map((participant) => [participant.id, participant.name]),
+  );
+  const enrichedVoteRows = voteRows.map((row) => {
+    const loserNames = parseLoserIds(row.loser_participant_ids_json, row.loser_participant_id)
+      .map((id) => loserNameById.get(id))
+      .filter(Boolean);
+
+    return {
+      ...row,
+      loser_names: loserNames,
+      loser_name: loserNames.join(", "),
+    };
+  });
 
   const listenRows = db
     .prepare(`
@@ -1128,7 +1177,7 @@ function getPollReportData(pollId) {
     .all(pollId);
 
   const votesByWinnerId = new Map();
-  voteRows.forEach((row) => {
+  enrichedVoteRows.forEach((row) => {
     const current = votesByWinnerId.get(row.winner_participant_id) || [];
     current.push(row);
     votesByWinnerId.set(row.winner_participant_id, current);
@@ -1165,12 +1214,12 @@ function getPollReportData(pollId) {
     totals: {
       participants: participantsWithVotes.length,
       votes: totalAdjustedVotes,
-      rawVotes: voteRows.length,
-      voters: new Set(voteRows.map((vote) => vote.telegram_id)).size,
+      rawVotes: enrichedVoteRows.length,
+      voters: new Set(enrichedVoteRows.map((vote) => vote.telegram_id)).size,
       listens: listenRows.length,
     },
     participants: participantsWithVotes.sort((left, right) => right.voteCount - left.voteCount || left.name.localeCompare(right.name, "ru")),
-    recentVotes: voteRows.slice(0, 100),
+    recentVotes: enrichedVoteRows.slice(0, 100),
   };
 }
 
@@ -1228,20 +1277,45 @@ function adminStats() {
         tu.full_name,
         tu.username,
         winner.name AS winner_name,
-        loser.name AS loser_name
+        v.loser_participant_id,
+        v.loser_participant_ids_json
       FROM votes v
       JOIN polls poll ON poll.id = v.poll_id
       JOIN telegram_users tu ON tu.id = v.voter_user_id
       JOIN participants winner ON winner.id = v.winner_participant_id
-      JOIN participants loser ON loser.id = v.loser_participant_id
       WHERE ${completedVotesFilter("v")}
       ORDER BY v.created_at DESC
       LIMIT 100
     `)
     .all();
 
+  const recentLoserIds = Array.from(
+    new Set(
+      recentVoteRows.flatMap((row) => parseLoserIds(row.loser_participant_ids_json, row.loser_participant_id)),
+    ),
+  );
+  const recentLoserNameById = new Map(
+    (recentLoserIds.length
+      ? db
+          .prepare(`SELECT id, name FROM participants WHERE id IN (${recentLoserIds.map(() => "?").join(", ")})`)
+          .all(...recentLoserIds)
+      : []
+    ).map((participant) => [participant.id, participant.name]),
+  );
+  const enrichedRecentVoteRows = recentVoteRows.map((vote) => {
+    const loserNames = parseLoserIds(vote.loser_participant_ids_json, vote.loser_participant_id)
+      .map((id) => recentLoserNameById.get(id))
+      .filter(Boolean);
+
+    return {
+      ...vote,
+      loser_names: loserNames,
+      loser_name: loserNames.join(", "),
+    };
+  });
+
   const recentVotes = Array.from(
-    recentVoteRows.reduce((groups, vote) => {
+    enrichedRecentVoteRows.reduce((groups, vote) => {
       const current = groups.get(vote.user_id) || {
         user_id: vote.user_id,
         telegram_id: vote.telegram_id,
@@ -1787,22 +1861,25 @@ app.post("/vote", ensureUser, (req, res) => {
   }
 
   const voteTimestamp = nowIso();
-  const recordedLoserId = choiceIds.find((id) => id !== winnerId) || winnerId;
+  const loserIds = choiceIds.filter((id) => id !== winnerId);
+  const recordedLoserId = loserIds[0] || winnerId;
   db.prepare(`
     INSERT INTO votes (
       poll_id,
       voter_user_id,
       winner_participant_id,
       loser_participant_id,
+      loser_participant_ids_json,
       ip_address,
       user_agent,
       created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     pollId,
     userId,
     winnerId,
     recordedLoserId,
+    JSON.stringify(loserIds),
     req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
     req.headers["user-agent"] || "",
     voteTimestamp,
