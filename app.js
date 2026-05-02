@@ -514,6 +514,16 @@ function buildParticipantAudioUrl(audioFilePath) {
   return fileName ? `/media/${encodeURIComponent(fileName)}` : "";
 }
 
+function isDirectAudioUrl(value) {
+  const normalized = String(value || "").trim();
+
+  if (!/^https?:\/\//i.test(normalized)) {
+    return false;
+  }
+
+  return /\.(mp3|m4a|aac|ogg|oga|wav|flac)(?:[?#].*)?$/i.test(normalized);
+}
+
 function buildPollImageUrl(imagePath) {
   const normalized = String(imagePath || "").trim();
   if (!normalized) return "";
@@ -547,72 +557,16 @@ function savePollImageFile(pollId, file) {
   return buildPollImageUrl(finalPath);
 }
 
-function normalizeEmbedHtml(embedHtml) {
-  const rawValue = String(embedHtml || "").trim();
-
-  if (!rawValue) {
-    return "";
-  }
-
-  const detectEmbedProvider = (value) => {
-    if (/(?:https?:)?\/\/(?:www\.)?smule\.com\//i.test(value) || /\/frame\/box(?:[/?#]|$)/i.test(value)) {
-      return "smule";
-    }
-
-    if (/(?:https?:)?\/\/(?:www\.)?bandlab\.com\//i.test(value)) {
-      return "bandlab";
-    }
-
-    return "";
-  };
-
-  const wrapEmbedHtml = (html, provider) => {
-    const classNames = ["blind-embed"];
-
-    if (provider) {
-      classNames.push(`blind-embed--${provider}`);
-    }
-
-    return `<div class="${classNames.join(" ")}">${html}</div>`;
-  };
-
-  if (/<iframe[\s>]/i.test(rawValue)) {
-    return wrapEmbedHtml(rawValue, detectEmbedProvider(rawValue));
-  }
-
-  if (/^https?:\/\/(www\.)?smule\.com\//i.test(rawValue)) {
-    const smuleUrl = /\/frame\/box(?:[/?#]|$)/i.test(rawValue)
-      ? rawValue
-      : `${rawValue.replace(/\/+$/g, "")}/frame/box`;
-
-    return wrapEmbedHtml(
-      `<iframe frameborder="0" width="500" height="500" src="${escapeAttribute(smuleUrl)}"></iframe>`,
-      "smule",
-    );
-  }
-
-  if (/^https?:\/\/(www\.)?bandlab\.com\//i.test(rawValue)) {
-    return wrapEmbedHtml(
-      `<iframe width="560" height="202" src="${escapeAttribute(rawValue)}" allowfullscreen></iframe>`,
-      "bandlab",
-    );
-  }
-
-  if (/^https?:\/\//i.test(rawValue)) {
-    return wrapEmbedHtml(
-      `<iframe frameborder="0" width="100%" height="320" src="${escapeAttribute(rawValue)}"></iframe>`,
-      detectEmbedProvider(rawValue),
-    );
-  }
-
-  return wrapEmbedHtml(rawValue, detectEmbedProvider(rawValue));
-}
-
 function decorateParticipant(participant) {
+  const directAudioUrl = participant.audio_source_type === "external_url"
+    ? String(participant.audio_source_url || "").trim()
+    : "";
+
   return {
     ...participant,
-    embed_html: normalizeEmbedHtml(participant.embed_html),
+    embed_html: "",
     audio_url: buildParticipantAudioUrl(participant.audio_file_path),
+    playback_url: directAudioUrl || buildParticipantAudioUrl(participant.audio_file_path),
   };
 }
 
@@ -1145,22 +1099,26 @@ function adminStats() {
 }
 
 function populateParticipantEmbed(participantId, embedHtml) {
-  const normalizedEmbedHtml = normalizeEmbedHtml(embedHtml);
-  if (!normalizedEmbedHtml) {
-    throw new Error("Iframe or source URL is required.");
+  const rawValue = String(embedHtml || "").trim();
+  if (!rawValue) {
+    throw new Error("Direct audio URL is required.");
   }
 
   clearParticipantAudioFiles(participantId);
+
+  if (!isDirectAudioUrl(rawValue)) {
+    throw new Error("Use a direct audio URL like .mp3 or .m4a.");
+  }
 
   db.prepare(`
     UPDATE participants
     SET embed_html = ?, audio_file_path = ?, audio_source_url = ?, audio_source_type = ?, updated_at = ?
     WHERE id = ?
   `).run(
-    normalizedEmbedHtml,
     "",
     "",
-    "",
+    rawValue,
+    "external_url",
     nowIso(),
     participantId,
   );
@@ -1921,8 +1879,8 @@ app.post("/admin/participants", ensureAdmin, (req, res) => {
     clearParticipantAudioFiles(participantId);
     db.prepare("DELETE FROM participants WHERE id = ?").run(participantId);
     res.status(400).render("error", {
-      title: "Ошибка сохранения iframe",
-      message: error.message || "Не удалось сохранить iframe участника.",
+      title: "Ошибка сохранения аудиоссылки",
+      message: error.message || "Не удалось сохранить аудиоссылку участника.",
     });
   }
 });
@@ -1955,8 +1913,8 @@ app.post("/admin/participants/:id/update", ensureAdmin, (req, res) => {
     res.redirect("/admin");
   } catch (error) {
     res.status(400).render("error", {
-      title: "Ошибка обновления iframe",
-      message: error.message || "Не удалось обновить iframe участника.",
+      title: "Ошибка обновления аудиоссылки",
+      message: error.message || "Не удалось обновить аудиоссылку участника.",
     });
   }
 });

@@ -93,10 +93,20 @@
             <% votingProgress.participants.forEach((participant, index) => { %>
               <article class="contestant">
                 <div class="contestant-media">
-                  <% if (participant.embed_html) { %>
-                    <%- participant.embed_html %>
+                  <% if (participant.playback_url) { %>
+                    <div class="audio-entry">
+                      <span class="audio-entry-label">Аудио участника</span>
+                      <audio
+                        class="audio-player"
+                        controls
+                        preload="none"
+                        controlsList="nodownload noplaybackrate"
+                        src="<%= participant.playback_url %>"
+                        data-listen-url="/polls/<%= poll.slug %>/participants/<%= participant.id %>/listen"
+                      ></audio>
+                    </div>
                   <% } else { %>
-                    <div class="notice">Iframe для этой записи еще не добавлен.</div>
+                    <div class="notice">Аудиоссылка для этой записи еще не добавлена.</div>
                   <% } %>
                 </div>
                 <div class="contestant-copy">

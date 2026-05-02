@@ -118,11 +118,11 @@
               <input type="text" name="name" required />
             </label>
             <label>
-              <span>Iframe или ссылка</span>
-              <textarea name="embed_html" rows="4" placeholder="<iframe ...></iframe> или https://..." required></textarea>
+              <span>Прямая аудиоссылка</span>
+              <textarea name="embed_html" rows="4" placeholder="https://.../track.m4a или https://.../track.mp3" required></textarea>
             </label>
             <div class="participant-source-actions">
-              <button class="primary-button" type="submit">Сохранить iframe</button>
+              <button class="primary-button" type="submit">Сохранить источник</button>
             </div>
           </form>
         </article>
@@ -219,12 +219,19 @@
                           </td>
                           <td><%= participant.is_active ? "Активен" : "Отключен" %></td>
                           <td class="payload-cell">
-                            <% if (participant.embed_html) { %>
-                              <%- participant.embed_html %>
-                            <% } else if (participant.audio_url) { %>
-                              <div class="notice">Есть старый локальный файл, но режим уже переведен на iframe.</div>
+                            <% if (participant.playback_url) { %>
+                              <div class="audio-entry">
+                                <span class="audio-entry-label">Внешний аудиоисточник</span>
+                                <audio
+                                  class="audio-player"
+                                  controls
+                                  preload="none"
+                                  controlsList="nodownload noplaybackrate"
+                                  src="<%= participant.playback_url %>"
+                                ></audio>
+                              </div>
                             <% } else { %>
-                              <div class="notice">Iframe еще не добавлен.</div>
+                              <div class="notice">Аудиоссылка еще не добавлена.</div>
                             <% } %>
                           </td>
                           <td class="participant-stats-cell">
@@ -305,8 +312,8 @@
                                 <input type="text" name="name" value="<%= participant.name %>" required />
                               </label>
                               <label>
-                                <span>Новый iframe или ссылка</span>
-                                <textarea name="embed_html" rows="4" placeholder="<iframe ...></iframe> или https://..."><%= participant.audio_source_url || participant.embed_html || "" %></textarea>
+                                <span>Новая прямая аудиоссылка</span>
+                                <textarea name="embed_html" rows="4" placeholder="https://.../track.m4a или https://.../track.mp3"><%= participant.audio_source_url || "" %></textarea>
                               </label>
                               <div class="participant-source-actions">
                                 <button class="primary-button" type="submit">Сохранить изменения</button>

@@ -85,9 +85,18 @@
               </summary>
               <div class="report-participant-body">
                 <div class="report-participant-layout">
-                  <% if (participant.embed_html) { %>
+                  <% if (participant.playback_url) { %>
                     <aside class="report-participant-media">
-                      <div class="mini-embed mini-embed-compact"><%- participant.embed_html %></div>
+                      <div class="audio-entry">
+                        <span class="audio-entry-label">Аудио участника</span>
+                        <audio
+                          class="audio-player"
+                          controls
+                          preload="none"
+                          controlsList="nodownload noplaybackrate"
+                          src="<%= participant.playback_url %>"
+                        ></audio>
+                      </div>
                     </aside>
                   <% } %>
 
