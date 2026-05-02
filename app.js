@@ -659,6 +659,21 @@ function extractSmulePerformanceKey(sourceUrl) {
   return match ? match[1] : "";
 }
 
+function summarizeSmuleResponse(label, responseText) {
+  const rawText = String(responseText || "");
+  const compactText = rawText.replace(/\s+/g, " ").trim();
+  const preview = compactText.slice(0, 220) || "empty";
+  const flags = [];
+
+  if (rawText.includes("media_url")) flags.push("has_media_url");
+  if (rawText.includes(".m4a")) flags.push("has_m4a");
+  if (rawText.includes("Just a moment")) flags.push("cloudflare");
+  if (rawText.includes("<html")) flags.push("html");
+  if (rawText.trim().startsWith("{")) flags.push("json");
+
+  return `${label}: ${flags.join(",") || "no_markers"} | ${preview}`;
+}
+
 function buildSmuleLookupUrls(sourceUrl) {
   const recordingUrl = normalizeSmuleSourceUrl(sourceUrl);
   const performanceKey = extractSmulePerformanceKey(recordingUrl);
@@ -791,7 +806,16 @@ async function resolveSmuleAudioUrl(sourceUrl) {
   }
 
   if (!encodedMediaUrl) {
-    throw new Error("Smule audio URL was not found in the API or page response.");
+    const debugBasePath = path.join(TMP_UPLOAD_DIR, `smule-debug-${performanceKey}`);
+    const apiDumpPath = `${debugBasePath}-api.txt`;
+    const pageDumpPath = `${debugBasePath}-page.html`;
+
+    fs.writeFileSync(apiDumpPath, apiResponse || "", "utf8");
+    fs.writeFileSync(pageDumpPath, pageHtml || "", "utf8");
+
+    throw new Error(
+      `Smule audio URL was not found in the API or page response. ${summarizeSmuleResponse("api", apiResponse)} | ${summarizeSmuleResponse("page", pageHtml)} | dumps: ${path.basename(apiDumpPath)}, ${path.basename(pageDumpPath)}`,
+    );
   }
 
   return decodeSmuleMediaUrl(encodedMediaUrl);
