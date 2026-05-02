@@ -563,7 +563,7 @@ textarea:focus-visible,
 .audio-shell {
   width: min(100%, 720px);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
   padding: 16px 18px;
@@ -663,9 +663,9 @@ textarea:focus-visible,
 
 .audio-volume-group {
   display: inline-grid;
-  grid-template-columns: auto 92px;
+  grid-template-columns: auto 74px;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .audio-range {
@@ -706,8 +706,7 @@ textarea:focus-visible,
   background: transparent;
 }
 
-.audio-control-mute,
-.audio-control-skip {
+.audio-control-mute {
   height: 42px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.05);
@@ -716,16 +715,9 @@ textarea:focus-visible,
 
 .audio-control-mute {
   position: relative;
-  width: 42px;
+  width: 38px;
   display: grid;
   place-items: center;
-}
-
-.audio-control-skip {
-  min-width: 48px;
-  padding: 0 14px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
 }
 
 .audio-icon-volume {
@@ -1507,14 +1499,10 @@ td {
 }
 
 .duel-triple .audio-volume-group {
-  width: 100%;
+  width: min(100%, 220px);
+  margin-inline: auto;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-}
-
-.duel-triple .audio-control-skip {
-  min-width: 44px;
-  padding: 0 12px;
+  gap: 8px;
 }
 
 .duel-triple .audio-range::-webkit-slider-thumb {
@@ -1903,7 +1891,6 @@ td {
   }
 
   .audio-control-play,
-  .audio-control-skip,
   .audio-control-mute {
     justify-self: center;
   }

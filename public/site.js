@@ -75,7 +75,6 @@ function enhanceAudioPlayer(player) {
     "</button>",
     '<input class="audio-range audio-volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Громкость" />',
     "</div>",
-    '<button class="audio-control audio-control-skip" type="button" aria-label="Перемотать на 10 секунд вперед">10</button>',
   ].join("");
 
   player.insertAdjacentElement("afterend", shell);
@@ -98,16 +97,6 @@ function enhanceAudioPlayer(player) {
     }
 
     player.pause();
-  });
-
-  shell.querySelector(".audio-control-skip").addEventListener("click", function () {
-    var nextTime = Math.min((player.currentTime || 0) + 10, player.duration || player.currentTime || 0);
-
-    if (!Number.isFinite(nextTime)) {
-      return;
-    }
-
-    player.currentTime = nextTime;
   });
 
   progress.addEventListener("input", function () {
