@@ -447,20 +447,8 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function extractIframeSrc(embedHtml) {
-  const html = String(embedHtml || "").trim();
-  if (!html) return "";
-
-  const match = html.match(/<iframe[^>]+src=(["'])(.*?)\1/i);
-  return match?.[2] ? String(match[2]).trim() : "";
-}
-
 function decorateParticipant(participant) {
-  return {
-    ...participant,
-    has_blind_player: Boolean(String(participant.embed_html || "").trim()),
-    blind_player_src: extractIframeSrc(participant.embed_html),
-  };
+  return participant;
 }
 
 function canViewPollReport(poll, isAdmin) {
