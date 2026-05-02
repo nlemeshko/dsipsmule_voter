@@ -554,8 +554,30 @@ function normalizeEmbedHtml(embedHtml) {
     return "";
   }
 
+  const detectEmbedProvider = (value) => {
+    if (/(?:https?:)?\/\/(?:www\.)?smule\.com\//i.test(value) || /\/frame\/box(?:[/?#]|$)/i.test(value)) {
+      return "smule";
+    }
+
+    if (/(?:https?:)?\/\/(?:www\.)?bandlab\.com\//i.test(value)) {
+      return "bandlab";
+    }
+
+    return "";
+  };
+
+  const wrapEmbedHtml = (html, provider) => {
+    const classNames = ["blind-embed"];
+
+    if (provider) {
+      classNames.push(`blind-embed--${provider}`);
+    }
+
+    return `<div class="${classNames.join(" ")}">${html}</div>`;
+  };
+
   if (/<iframe[\s>]/i.test(rawValue)) {
-    return rawValue;
+    return wrapEmbedHtml(rawValue, detectEmbedProvider(rawValue));
   }
 
   if (/^https?:\/\/(www\.)?smule\.com\//i.test(rawValue)) {
@@ -563,18 +585,27 @@ function normalizeEmbedHtml(embedHtml) {
       ? rawValue
       : `${rawValue.replace(/\/+$/g, "")}/frame/box`;
 
-    return `<iframe frameborder="0" width="500" height="500" src="${escapeAttribute(smuleUrl)}"></iframe>`;
+    return wrapEmbedHtml(
+      `<iframe frameborder="0" width="500" height="500" src="${escapeAttribute(smuleUrl)}"></iframe>`,
+      "smule",
+    );
   }
 
   if (/^https?:\/\/(www\.)?bandlab\.com\//i.test(rawValue)) {
-    return `<iframe width="560" height="202" src="${escapeAttribute(rawValue)}" allowfullscreen></iframe>`;
+    return wrapEmbedHtml(
+      `<iframe width="560" height="202" src="${escapeAttribute(rawValue)}" allowfullscreen></iframe>`,
+      "bandlab",
+    );
   }
 
   if (/^https?:\/\//i.test(rawValue)) {
-    return `<iframe frameborder="0" width="100%" height="320" src="${escapeAttribute(rawValue)}"></iframe>`;
+    return wrapEmbedHtml(
+      `<iframe frameborder="0" width="100%" height="320" src="${escapeAttribute(rawValue)}"></iframe>`,
+      detectEmbedProvider(rawValue),
+    );
   }
 
-  return rawValue;
+  return wrapEmbedHtml(rawValue, detectEmbedProvider(rawValue));
 }
 
 function decorateParticipant(participant) {

@@ -438,6 +438,48 @@ textarea:focus-visible,
   padding: 22px;
 }
 
+.blind-embed {
+  --blind-plate: linear-gradient(180deg, rgba(21, 31, 42, 0.98), rgba(13, 20, 29, 0.98));
+  position: relative;
+  width: 100%;
+}
+
+.blind-embed iframe {
+  position: relative;
+  z-index: 1;
+}
+
+.contestant-media .blind-embed--smule::before,
+.contestant-media .blind-embed--bandlab::before,
+.contestant-media .blind-embed--bandlab::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(202, 184, 146, 0.05);
+}
+
+.contestant-media .blind-embed--smule::before {
+  inset: 16px 16px auto;
+  height: 74px;
+  background: var(--blind-plate);
+}
+
+.contestant-media .blind-embed--bandlab::before {
+  inset: 16px 16px auto;
+  height: 106px;
+  background: var(--blind-plate);
+}
+
+.contestant-media .blind-embed--bandlab::after {
+  top: 48px;
+  left: 28px;
+  width: min(178px, 34%);
+  height: 178px;
+  background: var(--blind-plate);
+}
+
 .contestant img {
   height: 320px;
   width: 100%;
