@@ -716,28 +716,70 @@ async function resolveSmuleAudioUrl(sourceUrl) {
     throw new Error("Smule performance key was not found in the provided URL.");
   }
 
-  const { stdout } = await execFileAsync("curl", [
-    "-s",
-    "-L",
-    "-A",
-    SMULE_USER_AGENT,
-    "--compressed",
-    "-H",
-    "accept: application/json,text/plain,*/*",
-    "-H",
-    `referer: ${recordingUrl}`,
-    `https://www.smule.com/api/performance/${performanceKey}`,
-  ]);
+  const cookieJarPath = path.join(TMP_UPLOAD_DIR, `smule-${performanceKey}.cookies.txt`);
+  let pageHtml = "";
+  let apiResponse = "";
 
-  const directAudioUrl = extractSmuleDirectAudioUrl(stdout);
-  if (directAudioUrl) {
-    return directAudioUrl;
+  try {
+    const pageResult = await execFileAsync("curl", [
+      "-s",
+      "-L",
+      "-A",
+      SMULE_USER_AGENT,
+      "--compressed",
+      "-c",
+      cookieJarPath,
+      "-b",
+      cookieJarPath,
+      "-H",
+      "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "-H",
+      "accept-language: en-US,en;q=0.9",
+      "-H",
+      "cache-control: no-cache",
+      recordingUrl,
+    ]);
+    pageHtml = pageResult.stdout;
+
+    const apiResult = await execFileAsync("curl", [
+      "-s",
+      "-L",
+      "-A",
+      SMULE_USER_AGENT,
+      "--compressed",
+      "-c",
+      cookieJarPath,
+      "-b",
+      cookieJarPath,
+      "-H",
+      "accept: application/json,text/plain,*/*",
+      "-H",
+      "accept-language: en-US,en;q=0.9",
+      "-H",
+      "x-requested-with: XMLHttpRequest",
+      "-H",
+      `referer: ${recordingUrl}`,
+      `https://www.smule.com/api/performance/${performanceKey}`,
+    ]);
+    apiResponse = apiResult.stdout;
+  } finally {
+    fs.rmSync(cookieJarPath, { force: true });
   }
 
-  let encodedMediaUrl = extractSmuleEncodedMediaUrl(stdout);
+  const apiDirectAudioUrl = extractSmuleDirectAudioUrl(apiResponse);
+  if (apiDirectAudioUrl) {
+    return apiDirectAudioUrl;
+  }
+
+  const pageDirectAudioUrl = extractSmuleDirectAudioUrl(pageHtml);
+  if (pageDirectAudioUrl) {
+    return pageDirectAudioUrl;
+  }
+
+  let encodedMediaUrl = extractSmuleEncodedMediaUrl(apiResponse);
   if (!encodedMediaUrl) {
     try {
-      const payload = JSON.parse(stdout);
+      const payload = JSON.parse(apiResponse);
       encodedMediaUrl = String(payload?.media_url || payload?.performance?.media_url || "").trim();
     } catch (error) {
       encodedMediaUrl = "";
@@ -745,7 +787,11 @@ async function resolveSmuleAudioUrl(sourceUrl) {
   }
 
   if (!encodedMediaUrl) {
-    throw new Error("Smule audio URL was not found in the API response.");
+    encodedMediaUrl = extractSmuleEncodedMediaUrl(pageHtml);
+  }
+
+  if (!encodedMediaUrl) {
+    throw new Error("Smule audio URL was not found in the API or page response.");
   }
 
   return decodeSmuleMediaUrl(encodedMediaUrl);
