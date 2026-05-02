@@ -1484,6 +1484,49 @@ td {
   padding: 18px 22px;
 }
 
+.duel-triple .audio-art {
+  width: min(100%, 150px);
+}
+
+.duel-triple .audio-shell {
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+}
+
+.duel-triple .audio-control-play {
+  justify-self: center;
+}
+
+.duel-triple .audio-timeline {
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.duel-triple .audio-volume-group {
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.duel-triple .audio-control-skip {
+  min-width: 44px;
+  padding: 0 12px;
+}
+
+.duel-triple .audio-range::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+}
+
+.duel-triple .audio-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+}
+
 .duel-triple .contestant .smule-embed {
   padding: 0;
 }
