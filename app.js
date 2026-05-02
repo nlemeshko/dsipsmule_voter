@@ -26,6 +26,7 @@ const STORAGE_DIR = path.dirname(DB_PATH);
 const MEDIA_DIR = path.join(STORAGE_DIR, "media");
 const TMP_UPLOAD_DIR = path.join(STORAGE_DIR, "tmp-uploads");
 const execFileAsync = promisify(execFile);
+const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const SMULE_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 const SMULE_DECODE_KEY = decodeBase64String(
@@ -633,6 +634,26 @@ function extractSmuleEncodedMediaUrl(pageHtml) {
   return "";
 }
 
+function extractSmuleDirectAudioUrl(responseText) {
+  const rawText = String(responseText || "");
+  const patterns = [
+    /https:\/\/[^"'\\\s]+\.m4a(?:\?[^"'\\\s]*)?/i,
+    /https:\/\/[^"'\\\s]+\/rendered\/[^"'\\\s]+\.m4a(?:\?[^"'\\\s]*)?/i,
+    /"audio_url":"(https:\/\/[^"]+\.m4a[^"]*)"/i,
+    /"file":"(https:\/\/[^"]+\.m4a[^"]*)"/i,
+    /"mediaUrl":"(https:\/\/[^"]+\.m4a[^"]*)"/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = rawText.match(pattern);
+    if (match) {
+      return String(match[1] || match[0] || "").replace(/\\"/g, '"').replace(/&amp;/g, "&");
+    }
+  }
+
+  return "";
+}
+
 function extractSmulePerformanceKey(sourceUrl) {
   const normalizedUrl = normalizeSmuleSourceUrl(sourceUrl);
   const match = normalizedUrl.match(/\/(\d+_\d+)(?:$|[/?#])/);
@@ -656,6 +677,15 @@ function buildSmuleLookupUrls(sourceUrl) {
   }
 
   return Array.from(new Set(urls));
+}
+
+function buildSmuleFrameUrls(sourceUrl) {
+  const recordingUrl = normalizeSmuleSourceUrl(sourceUrl).replace(/\/+$/g, "");
+  return [`${recordingUrl}/frame`, `${recordingUrl}/frame/box`];
+}
+
+function isDirectM4aUrl(url) {
+  return /https:\/\/[^"'\\\s]+\.m4a(?:\?[^"'\\\s]*)?$/i.test(String(url || "").trim());
 }
 
 function decodeSmuleMediaUrl(encodedMediaUrl) {
@@ -696,9 +726,98 @@ function decodeSmuleMediaUrl(encodedMediaUrl) {
   return decoded;
 }
 
+async function resolveSmuleAudioUrlFromFrame(sourceUrl) {
+  let chromiumLib;
+
+  try {
+    chromiumLib = require("playwright-core");
+  } catch (error) {
+    return "";
+  }
+
+  const { chromium } = chromiumLib;
+  const frameUrls = buildSmuleFrameUrls(sourceUrl);
+  let browser;
+
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: CHROMIUM_EXECUTABLE_PATH,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+      ],
+    });
+
+    const context = await browser.newContext({
+      userAgent: SMULE_USER_AGENT,
+    });
+
+    for (const frameUrl of frameUrls) {
+      const page = await context.newPage();
+      let directAudioUrl = "";
+      const captureUrl = (candidateUrl) => {
+        if (!directAudioUrl && isDirectM4aUrl(candidateUrl)) {
+          directAudioUrl = String(candidateUrl).trim();
+        }
+      };
+
+      page.on("request", (request) => captureUrl(request.url()));
+      page.on("response", (response) => captureUrl(response.url()));
+
+      try {
+        await page.goto(frameUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+        await page.waitForTimeout(5000);
+        await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+      } catch (error) {
+        // Try the next frame URL below.
+      }
+
+      if (!directAudioUrl) {
+        const resourceUrls = await page.evaluate(() => {
+          return performance
+            .getEntriesByType("resource")
+            .map((entry) => entry && entry.name)
+            .filter(Boolean);
+        }).catch(() => []);
+
+        for (const resourceUrl of resourceUrls) {
+          captureUrl(resourceUrl);
+          if (directAudioUrl) {
+            break;
+          }
+        }
+      }
+
+      await page.close().catch(() => {});
+
+      if (directAudioUrl) {
+        await context.close().catch(() => {});
+        return directAudioUrl;
+      }
+    }
+
+    await context.close().catch(() => {});
+  } finally {
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+  }
+
+  return "";
+}
+
 async function resolveSmuleAudioUrl(sourceUrl) {
   const recordingUrl = normalizeSmuleSourceUrl(sourceUrl);
+  const frameAudioUrl = await resolveSmuleAudioUrlFromFrame(recordingUrl);
+  if (frameAudioUrl) {
+    return frameAudioUrl;
+  }
+
   const lookupUrls = buildSmuleLookupUrls(recordingUrl);
+  let directAudioUrl = "";
   let encodedMediaUrl = "";
 
   for (const lookupUrl of lookupUrls) {
@@ -717,6 +836,11 @@ async function resolveSmuleAudioUrl(sourceUrl) {
       lookupUrl,
     ]);
 
+    directAudioUrl = extractSmuleDirectAudioUrl(stdout);
+    if (directAudioUrl) {
+      return directAudioUrl;
+    }
+
     encodedMediaUrl = extractSmuleEncodedMediaUrl(stdout);
     if (encodedMediaUrl) {
       break;
@@ -724,6 +848,10 @@ async function resolveSmuleAudioUrl(sourceUrl) {
 
     try {
       const payload = JSON.parse(stdout);
+      directAudioUrl = extractSmuleDirectAudioUrl(JSON.stringify(payload));
+      if (directAudioUrl) {
+        return directAudioUrl;
+      }
       encodedMediaUrl = String(payload?.media_url || payload?.performance?.media_url || "").trim();
     } catch (error) {
       encodedMediaUrl = "";
