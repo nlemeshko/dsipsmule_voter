@@ -26,6 +26,7 @@ const STORAGE_DIR = path.dirname(DB_PATH);
 const MEDIA_DIR = path.join(STORAGE_DIR, "media");
 const TMP_UPLOAD_DIR = path.join(STORAGE_DIR, "tmp-uploads");
 const execFileAsync = promisify(execFile);
+const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const SMULE_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 const SMULE_DECODE_KEY = decodeBase64String(
@@ -686,6 +687,11 @@ function buildSmuleLookupUrls(sourceUrl) {
   return Array.from(new Set(urls));
 }
 
+function buildSmuleFrameUrls(sourceUrl) {
+  const recordingUrl = normalizeSmuleSourceUrl(sourceUrl).replace(/\/+$/g, "");
+  return [`${recordingUrl}/frame`, `${recordingUrl}/frame/box`];
+}
+
 function decodeSmuleMediaUrl(encodedMediaUrl) {
   const rawValue = String(encodedMediaUrl || "");
   if (!rawValue.startsWith("e:")) {
@@ -724,11 +730,118 @@ function decodeSmuleMediaUrl(encodedMediaUrl) {
   return decoded;
 }
 
+async function resolveSmuleAudioUrlFromBrowser(sourceUrl) {
+  let chromiumLib;
+
+  try {
+    chromiumLib = require("playwright-core");
+  } catch (error) {
+    return "";
+  }
+
+  const { chromium } = chromiumLib;
+  const performanceKey = extractSmulePerformanceKey(sourceUrl) || "unknown";
+  const browserHomePath = path.join(TMP_UPLOAD_DIR, `chromium-home-${performanceKey}`);
+  const browserRuntimePath = path.join(TMP_UPLOAD_DIR, `chromium-runtime-${performanceKey}`);
+  const frameUrls = buildSmuleFrameUrls(sourceUrl);
+
+  fs.mkdirSync(browserHomePath, { recursive: true });
+  fs.mkdirSync(browserRuntimePath, { recursive: true });
+
+  let browser;
+
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: CHROMIUM_EXECUTABLE_PATH,
+      env: {
+        ...process.env,
+        HOME: browserHomePath,
+        XDG_CONFIG_HOME: browserHomePath,
+        XDG_CACHE_HOME: browserHomePath,
+        XDG_RUNTIME_DIR: browserRuntimePath,
+      },
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-crash-reporter",
+        "--disable-crashpad",
+        "--no-crash-upload",
+      ],
+    });
+
+    const context = await browser.newContext({
+      userAgent: SMULE_USER_AGENT,
+    });
+
+    for (const frameUrl of frameUrls) {
+      const page = await context.newPage();
+      let directAudioUrl = "";
+
+      const captureCandidate = (candidateUrl) => {
+        const normalized = String(candidateUrl || "").trim();
+        if (!directAudioUrl && normalized.startsWith("https://") && normalized.includes(".m4a")) {
+          directAudioUrl = normalized;
+        }
+      };
+
+      page.on("request", (request) => captureCandidate(request.url()));
+      page.on("response", (response) => captureCandidate(response.url()));
+
+      try {
+        await page.goto(frameUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+        await page.waitForTimeout(6000);
+        await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+      } catch (error) {
+        // Try the next frame variant below.
+      }
+
+      if (!directAudioUrl) {
+        const resourceUrls = await page.evaluate(() => {
+          return performance
+            .getEntriesByType("resource")
+            .map((entry) => entry && entry.name)
+            .filter(Boolean);
+        }).catch(() => []);
+
+        for (const resourceUrl of resourceUrls) {
+          captureCandidate(resourceUrl);
+          if (directAudioUrl) {
+            break;
+          }
+        }
+      }
+
+      await page.close().catch(() => {});
+
+      if (directAudioUrl) {
+        await context.close().catch(() => {});
+        return directAudioUrl;
+      }
+    }
+
+    await context.close().catch(() => {});
+  } finally {
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+  }
+
+  return "";
+}
+
 async function resolveSmuleAudioUrl(sourceUrl) {
   const recordingUrl = normalizeSmuleSourceUrl(sourceUrl);
   const performanceKey = extractSmulePerformanceKey(recordingUrl);
   if (!performanceKey) {
     throw new Error("Smule performance key was not found in the provided URL.");
+  }
+
+  const browserAudioUrl = await resolveSmuleAudioUrlFromBrowser(recordingUrl).catch(() => "");
+  if (browserAudioUrl) {
+    return browserAudioUrl;
   }
 
   const cookieJarPath = path.join(TMP_UPLOAD_DIR, `smule-${performanceKey}.cookies.txt`);
