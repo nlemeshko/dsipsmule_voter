@@ -41,14 +41,14 @@ function initBlindPlayers() {
     const trigger = card.querySelector("[data-listen-trigger]");
     const status = card.querySelector("[data-listen-status]");
     const listenUrl = card.dataset.listenUrl;
-    const playerUrl = card.dataset.playerUrl;
+    const playerSrc = card.dataset.playerSrc;
 
     if (!trigger || !status) {
       return;
     }
 
     trigger.addEventListener("click", async () => {
-      if (!playerUrl) {
+      if (!playerSrc) {
         status.textContent = "Не удалось подготовить плеер для этой записи.";
         return;
       }
@@ -69,7 +69,7 @@ function initBlindPlayers() {
       }
 
       if (modal && modalFrame) {
-        modalFrame.replaceChildren(createPlayerIframe(playerUrl));
+        modalFrame.replaceChildren(createPlayerIframe(playerSrc));
         modal.showModal();
       }
 

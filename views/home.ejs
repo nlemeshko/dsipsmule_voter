@@ -98,7 +98,7 @@
                       class="blind-player"
                       data-listen-card
                       data-listen-url="/polls/<%= poll.slug %>/participants/<%= participant.id %>/listen"
-                      data-player-url="/polls/<%= poll.slug %>/participants/<%= participant.id %>/player"
+                      data-player-src="<%= participant.blind_player_src %>"
                     >
                       <span class="blind-player-label">Запись <%= index + 1 %></span>
                       <button class="primary-button blind-play-button" type="button" data-listen-trigger>
