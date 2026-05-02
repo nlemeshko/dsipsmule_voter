@@ -1821,6 +1821,7 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
     participantsToDelete.forEach((participant) => {
       clearParticipantAudioFiles(participant.id);
     });
+    db.prepare("DELETE FROM participant_listens WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM votes WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM user_poll_progress WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM participants WHERE poll_id = ?").run(pollId);
@@ -1968,6 +1969,7 @@ app.post("/admin/participants/:id/delete", ensureAdmin, (req, res) => {
 
   const deleteParticipantTx = db.transaction(() => {
     clearParticipantAudioFiles(id);
+    db.prepare("DELETE FROM participant_listens WHERE participant_id = ?").run(id);
     db.prepare(`
       DELETE FROM votes
       WHERE winner_participant_id = ? OR loser_participant_id = ?
@@ -1990,6 +1992,7 @@ app.post("/admin/users/:id/reset-votes", ensureAdmin, (req, res) => {
   }
 
   const resetVotesTx = db.transaction(() => {
+    db.prepare("DELETE FROM participant_listens WHERE listener_user_id = ?").run(userId);
     db.prepare("DELETE FROM votes WHERE voter_user_id = ?").run(userId);
     db.prepare("DELETE FROM user_poll_progress WHERE user_id = ?").run(userId);
   });
