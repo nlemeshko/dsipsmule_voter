@@ -31,6 +31,7 @@ db.exec(`
     title TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     description TEXT,
+    image_url TEXT,
     redirect_url TEXT,
     is_visible INTEGER NOT NULL DEFAULT 1,
     is_active INTEGER NOT NULL DEFAULT 1,
@@ -102,6 +103,19 @@ db.exec(`
     FOREIGN KEY (final_winner_participant_id) REFERENCES participants(id)
   );
 
+  CREATE TABLE IF NOT EXISTS participant_listens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_id INTEGER NOT NULL,
+    participant_id INTEGER NOT NULL,
+    listener_user_id INTEGER NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (poll_id) REFERENCES polls(id),
+    FOREIGN KEY (participant_id) REFERENCES participants(id),
+    FOREIGN KEY (listener_user_id) REFERENCES telegram_users(id)
+  );
+
   CREATE TABLE IF NOT EXISTS sessions (
     sid TEXT PRIMARY KEY,
     sess TEXT NOT NULL,
@@ -121,6 +135,10 @@ const pollColumns = db
 
 if (!pollColumns.includes("is_visible")) {
   db.exec("ALTER TABLE polls ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1");
+}
+
+if (!pollColumns.includes("image_url")) {
+  db.exec("ALTER TABLE polls ADD COLUMN image_url TEXT");
 }
 
 if (!participantColumns.includes("embed_html")) {
@@ -177,11 +195,12 @@ function ensureDefaultPoll() {
   const timestamp = nowIso();
   const result = db.prepare(`
     INSERT INTO polls (title, slug, description, redirect_url, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 1, ?, ?)
+    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
   `).run(
     "Этап 1",
     "stage-1",
     "Первое голосование",
+    "",
     "https://dsipsmule.one",
     timestamp,
     timestamp,
@@ -428,6 +447,37 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+function extractIframeSrc(embedHtml) {
+  const html = String(embedHtml || "").trim();
+  if (!html) return "";
+
+  const match = html.match(/<iframe[^>]+src=(["'])(.*?)\1/i);
+  return match?.[2] ? String(match[2]).trim() : "";
+}
+
+function buildAutoplayEmbedSrc(embedHtml) {
+  const iframeSrc = extractIframeSrc(embedHtml);
+  if (!iframeSrc) return "";
+
+  try {
+    const url = new URL(iframeSrc);
+    url.searchParams.set("autoplay", "1");
+    url.searchParams.set("autoPlay", "1");
+    url.searchParams.set("autostart", "1");
+    url.searchParams.set("playsinline", "1");
+    return url.toString();
+  } catch {
+    return iframeSrc;
+  }
+}
+
+function decorateParticipant(participant) {
+  return {
+    ...participant,
+    blind_player_src: buildAutoplayEmbedSrc(participant.embed_html),
+  };
+}
+
 function canViewPollReport(poll, isAdmin) {
   return Boolean(poll) && (Boolean(isAdmin) || (poll.is_visible && !poll.is_active));
 }
@@ -441,6 +491,8 @@ function renderPollReportExcel(report) {
           <td>${escapeHtml(participant.name)}</td>
           <td>${participant.voteCount}</td>
           <td>${participant.uniqueVoterCount}</td>
+          <td>${participant.listenCount}</td>
+          <td>${participant.uniqueListenerCount}</td>
           <td>${participant.is_active ? "Активен" : "Скрыт"}</td>
         </tr>`,
     )
@@ -482,6 +534,7 @@ function renderPollReportExcel(report) {
       <tr><td>Участников</td><td>${report.totals.participants}</td></tr>
       <tr><td>Голосов</td><td>${report.totals.votes}</td></tr>
       <tr><td>Людей</td><td>${report.totals.voters}</td></tr>
+      <tr><td>Прослушиваний</td><td>${report.totals.listens}</td></tr>
       <tr><td>Сформирован</td><td>${generatedAt}</td></tr>
     </table>
     <br />
@@ -491,6 +544,8 @@ function renderPollReportExcel(report) {
         <th>Участник</th>
         <th>Голосов</th>
         <th>Людей</th>
+        <th>Прослушиваний</th>
+        <th>Слушателей</th>
         <th>Статус</th>
       </tr>
       ${participantRows}
@@ -558,6 +613,7 @@ function getPolls() {
   return db
     .prepare(`
       SELECT id, title, slug, description, redirect_url, is_visible, is_active, created_at
+      , image_url
       FROM polls
       ORDER BY created_at ASC, id ASC
     `)
@@ -568,6 +624,7 @@ function getPollBySlug(slug) {
   return db
     .prepare(`
       SELECT id, title, slug, description, redirect_url, is_visible, is_active
+      , image_url
       FROM polls
       WHERE slug = ?
     `)
@@ -582,7 +639,8 @@ function getActiveParticipants(pollId) {
       WHERE poll_id = ? AND is_active = 1
       ORDER BY id ASC
     `)
-    .all(pollId);
+    .all(pollId)
+    .map(decorateParticipant);
 }
 
 function getParticipantsByIds(ids, pollId) {
@@ -594,7 +652,7 @@ function getParticipantsByIds(ids, pollId) {
     )
     .all(pollId, ...ids);
 
-  const byId = new Map(rows.map((row) => [row.id, row]));
+  const byId = new Map(rows.map((row) => [row.id, decorateParticipant(row)]));
   return ids.map((id) => byId.get(id)).filter(Boolean);
 }
 
@@ -726,6 +784,7 @@ function getPollReportData(pollId) {
   const poll = db
     .prepare(`
       SELECT id, title, slug, description, redirect_url, is_active, created_at, updated_at
+      , image_url
       FROM polls
       WHERE id = ?
     `)
@@ -765,6 +824,22 @@ function getPollReportData(pollId) {
     `)
     .all(pollId);
 
+  const listenRows = db
+    .prepare(`
+      SELECT
+        pl.id,
+        pl.participant_id,
+        pl.created_at,
+        tu.telegram_id,
+        tu.full_name,
+        tu.username
+      FROM participant_listens pl
+      JOIN telegram_users tu ON tu.id = pl.listener_user_id
+      WHERE pl.poll_id = ?
+      ORDER BY pl.created_at DESC
+    `)
+    .all(pollId);
+
   const votesByWinnerId = new Map();
   voteRows.forEach((row) => {
     const current = votesByWinnerId.get(row.winner_participant_id) || [];
@@ -772,8 +847,16 @@ function getPollReportData(pollId) {
     votesByWinnerId.set(row.winner_participant_id, current);
   });
 
+  const listensByParticipantId = new Map();
+  listenRows.forEach((row) => {
+    const current = listensByParticipantId.get(row.participant_id) || [];
+    current.push(row);
+    listensByParticipantId.set(row.participant_id, current);
+  });
+
   const participantsWithVotes = participants.map((participant) => {
     const voteDetails = votesByWinnerId.get(participant.id) || [];
+    const listenDetails = listensByParticipantId.get(participant.id) || [];
     const witcherBonus = participant.witcher_choice ? 2 : 0;
     return {
       ...participant,
@@ -782,6 +865,9 @@ function getPollReportData(pollId) {
       voteCount: voteDetails.length + witcherBonus,
       uniqueVoterCount: new Set(voteDetails.map((vote) => vote.telegram_id)).size,
       voteDetails,
+      listenCount: listenDetails.length,
+      uniqueListenerCount: new Set(listenDetails.map((listen) => listen.telegram_id)).size,
+      listenDetails,
     };
   });
 
@@ -794,6 +880,7 @@ function getPollReportData(pollId) {
       votes: totalAdjustedVotes,
       rawVotes: voteRows.length,
       voters: new Set(voteRows.map((vote) => vote.telegram_id)).size,
+      listens: listenRows.length,
     },
     participants: participantsWithVotes.sort((left, right) => right.voteCount - left.voteCount || left.name.localeCompare(right.name, "ru")),
     recentVotes: voteRows.slice(0, 100),
@@ -811,6 +898,7 @@ function adminStats() {
         WHERE ${completedVotesFilter("v")}
       `)
       .get().count,
+    listens: db.prepare("SELECT COUNT(*) AS count FROM participant_listens").get().count,
     participants: db
       .prepare("SELECT COUNT(*) AS count FROM participants WHERE is_active = 1")
       .get().count,
@@ -898,6 +986,7 @@ function adminStats() {
       participantCount: pollParticipants.length,
       voteCount: report?.totals.votes || 0,
       uniqueVoterCount: report?.totals.voters || 0,
+      listenCount: report?.totals.listens || 0,
       participants: pollParticipants,
     };
   });
@@ -1259,6 +1348,47 @@ app.post("/auth/logout", (req, res) => {
   });
 });
 
+app.post("/polls/:slug/participants/:id/listen", ensureUser, (req, res) => {
+  const participantId = Number(req.params.id);
+  const poll = getPollBySlug(req.params.slug);
+
+  if (!poll || !poll.is_active || (!poll.is_visible && !req.session.isAdmin)) {
+    return res.status(404).json({ ok: false, error: "Голосование не найдено." });
+  }
+
+  const participant = db
+    .prepare(`
+      SELECT id
+      FROM participants
+      WHERE id = ? AND poll_id = ? AND is_active = 1
+    `)
+    .get(participantId, poll.id);
+
+  if (!participant) {
+    return res.status(404).json({ ok: false, error: "Запись не найдена." });
+  }
+
+  db.prepare(`
+    INSERT INTO participant_listens (
+      poll_id,
+      participant_id,
+      listener_user_id,
+      ip_address,
+      user_agent,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    poll.id,
+    participantId,
+    req.session.user.id,
+    req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
+    req.headers["user-agent"] || "",
+    nowIso(),
+  );
+
+  res.json({ ok: true });
+});
+
 app.post("/vote", ensureUser, (req, res) => {
   const pollId = Number(req.body.poll_id);
   const pollSlug = String(req.body.poll_slug || "");
@@ -1451,6 +1581,7 @@ app.post("/admin/polls", ensureAdmin, (req, res) => {
   const title = String(req.body.title || "").trim();
   const slugInput = String(req.body.slug || "").trim();
   const description = String(req.body.description || "").trim();
+  const imageUrl = String(req.body.image_url || "").trim();
   const redirectUrl = String(req.body.redirect_url || "").trim() || "https://dsipsmule.one";
   const slug = slugify(slugInput || title);
 
@@ -1465,9 +1596,9 @@ app.post("/admin/polls", ensureAdmin, (req, res) => {
 
   const timestamp = nowIso();
   db.prepare(`
-    INSERT INTO polls (title, slug, description, redirect_url, is_visible, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 1, 1, ?, ?)
-  `).run(title, slug, description, redirectUrl, timestamp, timestamp);
+    INSERT INTO polls (title, slug, description, image_url, redirect_url, is_visible, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)
+  `).run(title, slug, description, imageUrl, redirectUrl, timestamp, timestamp);
 
   res.redirect("/admin");
 });

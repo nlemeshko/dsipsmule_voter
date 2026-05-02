@@ -38,6 +38,10 @@
           <strong><%= totals.votes %></strong>
         </article>
         <article class="stat-card">
+          <span>Прослушивания</span>
+          <strong><%= totals.listens %></strong>
+        </article>
+        <article class="stat-card">
           <span>Активные участники</span>
           <strong><%= totals.participants %></strong>
         </article>
@@ -58,6 +62,10 @@
             <label>
               <span>Описание</span>
               <textarea name="description" rows="3"></textarea>
+            </label>
+            <label>
+              <span>Картинка этапа</span>
+              <input type="url" name="image_url" placeholder="https://..." />
             </label>
             <label>
               <span>Ссылка редиректа после завершения</span>
@@ -124,6 +132,9 @@
         <div class="cards-grid">
           <% polls.forEach((poll) => { %>
             <article class="mini-card">
+              <% if (poll.image_url) { %>
+                <img class="mini-card-cover" src="<%= poll.image_url %>" alt="<%= poll.title %>" />
+              <% } %>
               <div>
                 <strong><%= poll.title %></strong>
                 <p><%= poll.description || "Без описания" %></p>
@@ -165,6 +176,7 @@
                 <div class="poll-group-meta">
                   <span>Участников: <%= poll.participantCount %></span>
                   <span>Голосов: <%= poll.voteCount %></span>
+                  <span>Прослушиваний: <%= poll.listenCount %></span>
                   <span>Людей: <%= poll.uniqueVoterCount %></span>
                 </div>
               </summary>
@@ -229,6 +241,41 @@
                                           <td><%= vote.full_name || "—" %></td>
                                           <td><%= vote.username ? `@${vote.username}` : "—" %></td>
                                           <td><%= vote.loser_name || "—" %></td>
+                                        </tr>
+                                      <% }) %>
+                                    </tbody>
+                                  </table>
+                                </div>
+                              <% } %>
+                            </details>
+                            <details class="participant-votes">
+                              <summary>
+                                <strong><%= participant.listenCount %></strong>
+                                <span>прослушиваний</span>
+                              </summary>
+                              <% if (participant.listenDetails.length === 0) { %>
+                                <div class="notice">Эту запись еще не запускали.</div>
+                              <% } else { %>
+                                <div class="notice">
+                                  Уникальных слушателей: <strong><%= participant.uniqueListenerCount %></strong>
+                                </div>
+                                <div class="table-wrap">
+                                  <table>
+                                    <thead>
+                                      <tr>
+                                        <th>Когда</th>
+                                        <th>Telegram ID</th>
+                                        <th>Имя</th>
+                                        <th>Username</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <% participant.listenDetails.forEach((listen) => { %>
+                                        <tr>
+                                          <td><%= formatDate(listen.created_at) %></td>
+                                          <td><%= listen.telegram_id %></td>
+                                          <td><%= listen.full_name || "—" %></td>
+                                          <td><%= listen.username ? `@${listen.username}` : "—" %></td>
                                         </tr>
                                       <% }) %>
                                     </tbody>

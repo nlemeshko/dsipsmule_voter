@@ -53,6 +53,9 @@
         <section class="cards-grid">
           <% polls.forEach((poll) => { %>
             <article class="mini-card">
+              <% if (poll.image_url) { %>
+                <img class="mini-card-cover" src="<%= poll.image_url %>" alt="<%= poll.title %>" />
+              <% } %>
               <div>
                 <strong><%= poll.title %></strong>
                 <p><%= poll.description || "Описание пока не добавлено." %></p>
