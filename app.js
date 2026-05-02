@@ -639,6 +639,25 @@ function extractSmulePerformanceKey(sourceUrl) {
   return match ? match[1] : "";
 }
 
+function buildSmuleLookupUrls(sourceUrl) {
+  const recordingUrl = normalizeSmuleSourceUrl(sourceUrl);
+  const performanceKey = extractSmulePerformanceKey(recordingUrl);
+  const urls = [recordingUrl];
+
+  if (!/\/frame\/box(?:$|[?#])/i.test(recordingUrl)) {
+    urls.push(`${recordingUrl.replace(/\/+$/g, "")}/frame/box`);
+  }
+
+  if (performanceKey) {
+    urls.push(`https://www.smule.com/sing-recording/${performanceKey}`);
+    urls.push(`https://www.smule.com/p/${performanceKey}`);
+    urls.push(`https://www.smule.com/c/${performanceKey}`);
+    urls.unshift(`https://www.smule.com/api/performance/${performanceKey}`);
+  }
+
+  return Array.from(new Set(urls));
+}
+
 function decodeSmuleMediaUrl(encodedMediaUrl) {
   const rawValue = String(encodedMediaUrl || "");
   if (!rawValue.startsWith("e:")) {
@@ -679,39 +698,39 @@ function decodeSmuleMediaUrl(encodedMediaUrl) {
 
 async function resolveSmuleAudioUrl(sourceUrl) {
   const recordingUrl = normalizeSmuleSourceUrl(sourceUrl);
-  const { stdout: pageHtml } = await execFileAsync("curl", [
-    "-s",
-    "-L",
-    "-A",
-    SMULE_USER_AGENT,
-    "--compressed",
-    recordingUrl,
-  ]);
-  let encodedMediaUrl = extractSmuleEncodedMediaUrl(pageHtml);
+  const lookupUrls = buildSmuleLookupUrls(recordingUrl);
+  let encodedMediaUrl = "";
 
-  if (!encodedMediaUrl) {
-    const performanceKey = extractSmulePerformanceKey(recordingUrl);
+  for (const lookupUrl of lookupUrls) {
+    const { stdout } = await execFileAsync("curl", [
+      "-s",
+      "-L",
+      "-A",
+      SMULE_USER_AGENT,
+      "--compressed",
+      "-H",
+      "accept: application/json,text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "-H",
+      "accept-language: en-US,en;q=0.9",
+      "-H",
+      `referer: ${recordingUrl}`,
+      lookupUrl,
+    ]);
 
-    if (performanceKey) {
-      const { stdout: apiResponse } = await execFileAsync("curl", [
-        "-s",
-        "-L",
-        "-A",
-        SMULE_USER_AGENT,
-        "--compressed",
-        "-H",
-        "accept: application/json,text/plain,*/*",
-        "-H",
-        `referer: ${recordingUrl}`,
-        `https://www.smule.com/api/performance/${performanceKey}`,
-      ]);
+    encodedMediaUrl = extractSmuleEncodedMediaUrl(stdout);
+    if (encodedMediaUrl) {
+      break;
+    }
 
-      try {
-        const payload = JSON.parse(apiResponse);
-        encodedMediaUrl = String(payload?.media_url || payload?.performance?.media_url || "").trim();
-      } catch (error) {
-        encodedMediaUrl = "";
-      }
+    try {
+      const payload = JSON.parse(stdout);
+      encodedMediaUrl = String(payload?.media_url || payload?.performance?.media_url || "").trim();
+    } catch (error) {
+      encodedMediaUrl = "";
+    }
+
+    if (encodedMediaUrl) {
+      break;
     }
   }
 
