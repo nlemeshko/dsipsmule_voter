@@ -118,17 +118,11 @@
               <input type="text" name="name" required />
             </label>
             <label>
-              <span>Ссылка Smule или BandLab</span>
-              <input type="url" name="source_url" placeholder="https://..." />
-            </label>
-            <label>
-              <span>Или загрузите M4A вручную</span>
-              <input type="file" name="audio_file" accept=".m4a,audio/mp4,audio/x-m4a" />
+              <span>Аудиофайл участника</span>
+              <input type="file" name="audio_file" accept=".m4a,.mp3,audio/mp4,audio/x-m4a,audio/mpeg,audio/mp3" required />
             </label>
             <div class="participant-source-actions">
-              <button class="primary-button" type="submit" name="source_kind" value="smule">Скачать по прямой M4A ссылке</button>
-              <button class="primary-button" type="submit" name="source_kind" value="bandlab">Скачать с BandLab</button>
-              <button class="ghost-button" type="submit" name="source_kind" value="upload">Загрузить M4A</button>
+              <button class="primary-button" type="submit">Загрузить файл</button>
             </div>
           </form>
         </article>
@@ -228,17 +222,12 @@
                             <% if (participant.audio_url) { %>
                               <div class="audio-admin-preview">
                                 <audio controls preload="none">
-                                  <source src="<%= participant.audio_url %>" type="audio/mp4" />
+                                  <source src="<%= participant.audio_url %>" type="<%= participant.audio_mime_type %>" />
                                 </audio>
-                                <span><%= participant.audio_source_type || "upload" %></span>
-                                <% if (participant.audio_source_url) { %>
-                                  <a href="<%= participant.audio_source_url %>" target="_blank" rel="noreferrer">Источник</a>
-                                <% } %>
+                                <span>Локальный файл</span>
                               </div>
-                            <% } else if (participant.embed_html) { %>
-                              <div class="notice">Есть старый embed, но M4A еще не подготовлен.</div>
                             <% } else { %>
-                              <div class="notice">M4A еще не загружен.</div>
+                              <div class="notice">Аудиофайл еще не загружен.</div>
                             <% } %>
                           </td>
                           <td class="participant-stats-cell">
@@ -319,18 +308,12 @@
                                 <input type="text" name="name" value="<%= participant.name %>" required />
                               </label>
                               <label>
-                                <span>Новая ссылка Smule или BandLab</span>
-                                <input type="url" name="source_url" value="<%= participant.audio_source_url || "" %>" placeholder="https://..." />
-                              </label>
-                              <label>
-                                <span>Или заменить M4A вручную</span>
-                                <input type="file" name="audio_file" accept=".m4a,audio/mp4,audio/x-m4a" />
+                                <span>Новый аудиофайл</span>
+                                <input type="file" name="audio_file" accept=".m4a,.mp3,audio/mp4,audio/x-m4a,audio/mpeg,audio/mp3" />
                               </label>
                               <div class="participant-source-actions">
-                                <button class="primary-button" type="submit" name="source_kind" value="smule">Скачать со Smule</button>
-                                <button class="primary-button" type="submit" name="source_kind" value="bandlab">Скачать с BandLab</button>
-                                <button class="ghost-button" type="submit" name="source_kind" value="upload">Заменить M4A</button>
-                                <button class="ghost-button" type="submit">Сохранить имя</button>
+                                <button class="primary-button" type="submit">Сохранить имя</button>
+                                <button class="ghost-button" type="submit" formaction="/admin/participants/<%= participant.id %>/update">Заменить файл</button>
                               </div>
                             </form>
                           </td>

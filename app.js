@@ -1,8 +1,6 @@
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
-const { execFile } = require("child_process");
-const { promisify } = require("util");
 const express = require("express");
 const session = require("express-session");
 const Database = require("better-sqlite3");
@@ -25,9 +23,6 @@ const DB_PATH =
 const STORAGE_DIR = path.dirname(DB_PATH);
 const MEDIA_DIR = path.join(STORAGE_DIR, "media");
 const TMP_UPLOAD_DIR = path.join(STORAGE_DIR, "tmp-uploads");
-const execFileAsync = promisify(execFile);
-const SMULE_USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 
 fs.mkdirSync(STORAGE_DIR, { recursive: true });
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
@@ -486,71 +481,16 @@ function escapeAttribute(value) {
     .replace(/"/g, "&quot;");
 }
 
-function normalizeMediaSourceUrl(value) {
-  return String(value || "").trim();
-}
-
-function decodeBase64String(value) {
-  return Buffer.from(String(value || ""), "base64").toString("latin1");
-}
-
-function detectAudioSourceType(sourceUrl, fallbackType = "") {
-  const url = normalizeMediaSourceUrl(sourceUrl).toLowerCase();
-  if (fallbackType === "upload") return "upload";
-  if (url.includes("smule.com")) return "smule";
-  if (url.includes("bandlab.com")) return "bandlab";
-  return fallbackType || "";
-}
-
 function participantAudioBaseName(participantId) {
   return `participant-${participantId}`;
-}
-
-function normalizeSmuleSourceUrl(sourceUrl) {
-  const normalizedUrl = normalizeMediaSourceUrl(sourceUrl);
-
-  try {
-    const parsed = new URL(normalizedUrl);
-    if (!/smule\.com$/i.test(parsed.hostname)) {
-      return normalizedUrl;
-    }
-
-    parsed.search = "";
-    parsed.hash = "";
-    parsed.pathname = parsed.pathname.replace(/\/frame(?:\/box)?\/?$/i, "");
-    return parsed.toString();
-  } catch (error) {
-    return normalizedUrl.replace(/[?#].*$/g, "").replace(/\/frame(?:\/box)?\/?$/i, "");
-  }
-}
-
-function extractBandLabPostId(sourceUrl) {
-  const normalizedUrl = normalizeMediaSourceUrl(sourceUrl);
-
-  try {
-    const parsed = new URL(normalizedUrl);
-    const pathParts = parsed.pathname.split("/").filter(Boolean);
-    const postIndex = pathParts.findIndex((part) => part === "post");
-
-    if (postIndex !== -1 && pathParts[postIndex + 1]) {
-      return pathParts[postIndex + 1];
-    }
-  } catch (error) {
-    const match = normalizedUrl.match(/bandlab\.com\/post\/([a-f0-9-]+)/i);
-    if (match) {
-      return match[1];
-    }
-  }
-
-  return "";
 }
 
 function pollImageBaseName(pollId) {
   return `poll-${pollId}`;
 }
 
-function getParticipantAudioAbsolutePath(participantId) {
-  return path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}.m4a`);
+function getParticipantAudioAbsolutePath(participantId, extension = ".m4a") {
+  return path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}${extension}`);
 }
 
 function clearFilesByPrefix(prefix) {
@@ -607,162 +547,30 @@ function savePollImageFile(pollId, file) {
   return buildPollImageUrl(finalPath);
 }
 
-function extractSmuleDirectAudioUrl(responseText) {
-  const rawText = String(responseText || "");
-  const patterns = [
-    /https:\/\/[^"'\\\s]+\.m4a(?:\?[^"'\\\s]*)?/i,
-    /https:\/\/[^"'\\\s]+\/rendered\/[^"'\\\s]+\.m4a(?:\?[^"'\\\s]*)?/i,
-    /"audio_url":"(https:\/\/[^"]+\.m4a[^"]*)"/i,
-    /"file":"(https:\/\/[^"]+\.m4a[^"]*)"/i,
-    /"mediaUrl":"(https:\/\/[^"]+\.m4a[^"]*)"/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = rawText.match(pattern);
-    if (match) {
-      return String(match[1] || match[0] || "").replace(/\\"/g, '"').replace(/&amp;/g, "&");
-    }
-  }
-
-  return "";
-}
-
-async function resolveBandLabAudioUrl(sourceUrl) {
-  const postId = extractBandLabPostId(sourceUrl);
-
-  if (!postId) {
-    throw new Error("BandLab post ID was not found in the provided URL.");
-  }
-
-  const { stdout } = await execFileAsync("curl", [
-    "-s",
-    "-L",
-    "-A",
-    SMULE_USER_AGENT,
-    "--compressed",
-    `https://www.bandlab.com/api/v1.3/posts/${postId}`,
-  ]);
-
-  let payload;
-  try {
-    payload = JSON.parse(stdout);
-  } catch (error) {
-    throw new Error("BandLab returned an unreadable API response.");
-  }
-
-  const audioUrl = String(payload?.revision?.mixdown?.file || "").trim();
-  if (!audioUrl) {
-    throw new Error("BandLab mixdown file was not found for this post.");
-  }
-
-  return audioUrl;
-}
-
-async function downloadSmuleAudio(participantId, sourceUrl) {
-  const decodedAudioUrl = extractSmuleDirectAudioUrl(sourceUrl);
-  if (!decodedAudioUrl) {
-    throw new Error("For Smule, provide a direct M4A file URL.");
-  }
-  const finalAudioPath = getParticipantAudioAbsolutePath(participantId);
-
-  clearParticipantAudioFiles(participantId);
-
-  await execFileAsync("curl", [
-    "-s",
-    "-L",
-    decodedAudioUrl,
-    "-o",
-    finalAudioPath,
-  ]);
-
-  if (!fs.existsSync(finalAudioPath)) {
-    throw new Error("Smule audio file was not created.");
-  }
-
-  return finalAudioPath;
-}
-
-async function downloadBandLabAudio(participantId, sourceUrl) {
-  const audioUrl = await resolveBandLabAudioUrl(sourceUrl);
-  const finalAudioPath = getParticipantAudioAbsolutePath(participantId);
-
-  clearParticipantAudioFiles(participantId);
-
-  await execFileAsync("curl", [
-    "-s",
-    "-L",
-    audioUrl,
-    "-o",
-    finalAudioPath,
-  ]);
-
-  if (!fs.existsSync(finalAudioPath)) {
-    throw new Error("BandLab audio file was not created.");
-  }
-
-  return finalAudioPath;
-}
-
-async function downloadAudioFromUrl(participantId, sourceUrl) {
-  const normalizedUrl = normalizeMediaSourceUrl(sourceUrl);
-  const outputTemplate = path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}.%(ext)s`);
-  const finalAudioPath = getParticipantAudioAbsolutePath(participantId);
-
-  const sourceType = detectAudioSourceType(normalizedUrl);
-  if (sourceType === "smule") {
-    return downloadSmuleAudio(participantId, normalizedUrl);
-  }
-
-  if (sourceType === "bandlab") {
-    return downloadBandLabAudio(participantId, normalizedUrl);
-  }
-
-  clearParticipantAudioFiles(participantId);
-
-  await execFileAsync("yt-dlp", [
-    "--no-playlist",
-    "--extract-audio",
-    "--audio-format",
-    "m4a",
-    "--output",
-    outputTemplate,
-    normalizedUrl,
-  ]);
-
-  if (!fs.existsSync(finalAudioPath)) {
-    const candidates = fs
-      .readdirSync(MEDIA_DIR)
-      .filter((fileName) => fileName.startsWith(`${participantAudioBaseName(participantId)}.`));
-
-    const firstCandidate = candidates[0] ? path.join(MEDIA_DIR, candidates[0]) : "";
-    if (firstCandidate && fs.existsSync(firstCandidate)) {
-      fs.renameSync(firstCandidate, finalAudioPath);
-    }
-  }
-
-  if (!fs.existsSync(finalAudioPath)) {
-    throw new Error("Downloaded audio file was not created.");
-  }
-
-  return finalAudioPath;
-}
-
 function saveUploadedAudioFile(participantId, file) {
   if (!file) {
     throw new Error("No uploaded file provided.");
   }
 
   const extension = path.extname(file.originalname || "").toLowerCase();
-  const acceptedMimeTypes = new Set(["audio/mp4", "audio/m4a", "audio/x-m4a"]);
-  if (extension !== ".m4a" && !acceptedMimeTypes.has(String(file.mimetype || "").toLowerCase())) {
+  const acceptedExtensions = new Set([".m4a", ".mp3"]);
+  const acceptedMimeTypes = new Set(["audio/mp4", "audio/m4a", "audio/x-m4a", "audio/mpeg", "audio/mp3"]);
+  if (!acceptedExtensions.has(extension) && !acceptedMimeTypes.has(String(file.mimetype || "").toLowerCase())) {
     fs.rmSync(file.path, { force: true });
-    throw new Error("Only M4A files are supported.");
+    throw new Error("Only M4A and MP3 files are supported.");
   }
 
-  const finalPath = getParticipantAudioAbsolutePath(participantId);
+  const finalExtension = acceptedExtensions.has(extension) ? extension : ".m4a";
+  const finalPath = getParticipantAudioAbsolutePath(participantId, finalExtension);
   clearParticipantAudioFiles(participantId);
   fs.renameSync(file.path, finalPath);
   return finalPath;
+}
+
+function getAudioMimeType(audioFilePath) {
+  const extension = path.extname(String(audioFilePath || "")).toLowerCase();
+  if (extension === ".mp3") return "audio/mpeg";
+  return "audio/mp4";
 }
 
 function normalizeEmbedHtml(embedHtml) {
@@ -800,6 +608,7 @@ function decorateParticipant(participant) {
     ...participant,
     embed_html: normalizeEmbedHtml(participant.embed_html),
     audio_url: buildParticipantAudioUrl(participant.audio_file_path),
+    audio_mime_type: getAudioMimeType(participant.audio_file_path),
   };
 }
 
@@ -1331,32 +1140,22 @@ function adminStats() {
   return { totals, leaderboard, recentVotes, recentUsers, participants, polls, pollsWithParticipants };
 }
 
-async function populateParticipantAudio(participantId, sourceKind, sourceUrl, file) {
-  const normalizedSourceUrl = normalizeMediaSourceUrl(sourceUrl);
-  const resolvedSourceType = detectAudioSourceType(normalizedSourceUrl, sourceKind);
-  let audioFilePath = "";
-
-  if (resolvedSourceType === "upload") {
-    if (!file) {
-      throw new Error("M4A file is required for manual upload.");
-    }
-    audioFilePath = saveUploadedAudioFile(participantId, file);
-  } else {
-    if (!normalizedSourceUrl) {
-      throw new Error("Source URL is required.");
-    }
-    audioFilePath = await downloadAudioFromUrl(participantId, normalizedSourceUrl);
+async function populateParticipantAudio(participantId, file) {
+  if (!file) {
+    throw new Error("M4A or MP3 file is required for manual upload.");
   }
+
+  const audioFilePath = saveUploadedAudioFile(participantId, file);
 
   db.prepare(`
     UPDATE participants
     SET embed_html = ?, audio_file_path = ?, audio_source_url = ?, audio_source_type = ?, updated_at = ?
     WHERE id = ?
   `).run(
-    normalizeEmbedHtml(normalizedSourceUrl),
+    "",
     audioFilePath,
-    normalizedSourceUrl,
-    resolvedSourceType,
+    "",
+    "upload",
     nowIso(),
     participantId,
   );
@@ -2096,10 +1895,8 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
 app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async (req, res) => {
   const pollId = Number(req.body.poll_id);
   const name = String(req.body.name || "").trim();
-  const sourceKind = String(req.body.source_kind || "").trim();
-  const sourceUrl = String(req.body.source_url || "").trim();
 
-  if (!pollId || !name || !sourceKind) {
+  if (!pollId || !name || !req.file) {
     if (req.file?.path) {
       fs.rmSync(req.file.path, { force: true });
     }
@@ -2115,10 +1912,7 @@ app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async 
   const participantId = Number(result.lastInsertRowid);
 
   try {
-    await populateParticipantAudio(participantId, sourceKind, sourceUrl, req.file);
-    if (req.file?.path && sourceKind !== "upload") {
-      fs.rmSync(req.file.path, { force: true });
-    }
+    await populateParticipantAudio(participantId, req.file);
     res.redirect("/admin");
   } catch (error) {
     clearParticipantAudioFiles(participantId);
@@ -2136,8 +1930,6 @@ app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async 
 app.post("/admin/participants/:id/update", ensureAdmin, upload.single("audio_file"), async (req, res) => {
   const id = Number(req.params.id);
   const name = String(req.body.name || "").trim();
-  const sourceKind = String(req.body.source_kind || "").trim();
-  const sourceUrl = String(req.body.source_url || "").trim();
 
   const participant = db
     .prepare("SELECT id FROM participants WHERE id = ?")
@@ -2156,18 +1948,12 @@ app.post("/admin/participants/:id/update", ensureAdmin, upload.single("audio_fil
     WHERE id = ?
   `).run(name, nowIso(), id);
 
-  if (!sourceKind) {
-    if (req.file?.path) {
-      fs.rmSync(req.file.path, { force: true });
-    }
+  if (!req.file) {
     return res.redirect("/admin");
   }
 
   try {
-    await populateParticipantAudio(id, sourceKind, sourceUrl, req.file);
-    if (req.file?.path && sourceKind !== "upload") {
-      fs.rmSync(req.file.path, { force: true });
-    }
+    await populateParticipantAudio(id, req.file);
     res.redirect("/admin");
   } catch (error) {
     if (req.file?.path) {

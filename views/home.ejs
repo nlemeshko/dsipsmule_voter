@@ -97,12 +97,12 @@
                     <div class="audio-entry">
                       <span class="audio-entry-label">Запись <%= index + 1 %></span>
                       <audio class="audio-player" controls preload="none" data-listen-url="/polls/<%= poll.slug %>/participants/<%= participant.id %>/listen">
-                        <source src="<%= participant.audio_url %>" type="audio/mp4" />
+                        <source src="<%= participant.audio_url %>" type="<%= participant.audio_mime_type %>" />
                         Ваш браузер не поддерживает встроенный аудиоплеер.
                       </audio>
                     </div>
                   <% } else { %>
-                    <div class="notice">M4A для этой записи еще не загружен.</div>
+                    <div class="notice">Аудиофайл для этой записи еще не загружен.</div>
                   <% } %>
                 </div>
                 <div class="contestant-copy">
