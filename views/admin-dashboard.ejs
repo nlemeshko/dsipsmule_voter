@@ -103,7 +103,7 @@
 
         <article class="panel">
           <h2>Добавить участника</h2>
-          <form class="stack-form" method="post" action="/admin/participants" enctype="multipart/form-data">
+          <form class="stack-form" method="post" action="/admin/participants">
             <label>
               <span>Голосование</span>
               <select name="poll_id" required>
@@ -118,11 +118,11 @@
               <input type="text" name="name" required />
             </label>
             <label>
-              <span>Аудиофайл участника</span>
-              <input type="file" name="audio_file" accept=".m4a,.mp3,audio/mp4,audio/x-m4a,audio/mpeg,audio/mp3" required />
+              <span>Iframe или ссылка</span>
+              <textarea name="embed_html" rows="4" placeholder="<iframe ...></iframe> или https://..." required></textarea>
             </label>
             <div class="participant-source-actions">
-              <button class="primary-button" type="submit">Загрузить файл</button>
+              <button class="primary-button" type="submit">Сохранить iframe</button>
             </div>
           </form>
         </article>
@@ -219,15 +219,12 @@
                           </td>
                           <td><%= participant.is_active ? "Активен" : "Отключен" %></td>
                           <td class="payload-cell">
-                            <% if (participant.audio_url) { %>
-                              <div class="audio-admin-preview">
-                                <audio controls preload="none">
-                                  <source src="<%= participant.audio_url %>" type="<%= participant.audio_mime_type %>" />
-                                </audio>
-                                <span>Локальный файл</span>
-                              </div>
+                            <% if (participant.embed_html) { %>
+                              <%- participant.embed_html %>
+                            <% } else if (participant.audio_url) { %>
+                              <div class="notice">Есть старый локальный файл, но режим уже переведен на iframe.</div>
                             <% } else { %>
-                              <div class="notice">Аудиофайл еще не загружен.</div>
+                              <div class="notice">Iframe еще не добавлен.</div>
                             <% } %>
                           </td>
                           <td class="participant-stats-cell">
@@ -302,18 +299,17 @@
                             </details>
                           </td>
                           <td class="participant-edit-cell">
-                            <form class="stack-form participant-edit-form" method="post" action="/admin/participants/<%= participant.id %>/update" enctype="multipart/form-data">
+                            <form class="stack-form participant-edit-form" method="post" action="/admin/participants/<%= participant.id %>/update">
                               <label>
                                 <span>Имя участника</span>
                                 <input type="text" name="name" value="<%= participant.name %>" required />
                               </label>
                               <label>
-                                <span>Новый аудиофайл</span>
-                                <input type="file" name="audio_file" accept=".m4a,.mp3,audio/mp4,audio/x-m4a,audio/mpeg,audio/mp3" />
+                                <span>Новый iframe или ссылка</span>
+                                <textarea name="embed_html" rows="4" placeholder="<iframe ...></iframe> или https://..."><%= participant.audio_source_url || participant.embed_html || "" %></textarea>
                               </label>
                               <div class="participant-source-actions">
-                                <button class="primary-button" type="submit">Сохранить имя</button>
-                                <button class="ghost-button" type="submit" formaction="/admin/participants/<%= participant.id %>/update">Заменить файл</button>
+                                <button class="primary-button" type="submit">Сохранить изменения</button>
                               </div>
                             </form>
                           </td>

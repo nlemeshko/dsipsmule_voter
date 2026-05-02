@@ -93,20 +93,14 @@
             <% votingProgress.participants.forEach((participant, index) => { %>
               <article class="contestant">
                 <div class="contestant-media">
-                  <% if (participant.audio_url) { %>
-                    <div class="audio-entry">
-                      <span class="audio-entry-label">Запись <%= index + 1 %></span>
-                      <audio class="audio-player" controls preload="none" data-listen-url="/polls/<%= poll.slug %>/participants/<%= participant.id %>/listen">
-                        <source src="<%= participant.audio_url %>" type="<%= participant.audio_mime_type %>" />
-                        Ваш браузер не поддерживает встроенный аудиоплеер.
-                      </audio>
-                    </div>
+                  <% if (participant.embed_html) { %>
+                    <%- participant.embed_html %>
                   <% } else { %>
-                    <div class="notice">Аудиофайл для этой записи еще не загружен.</div>
+                    <div class="notice">Iframe для этой записи еще не добавлен.</div>
                   <% } %>
                 </div>
                 <div class="contestant-copy">
-                  <h2>Анонимная запись <%= index + 1 %></h2>
+                  <h2><%= participant.name %></h2>
                 </div>
                 <form method="post" action="/vote">
                   <input type="hidden" name="poll_id" value="<%= poll.id %>" />

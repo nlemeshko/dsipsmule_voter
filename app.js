@@ -547,32 +547,6 @@ function savePollImageFile(pollId, file) {
   return buildPollImageUrl(finalPath);
 }
 
-function saveUploadedAudioFile(participantId, file) {
-  if (!file) {
-    throw new Error("No uploaded file provided.");
-  }
-
-  const extension = path.extname(file.originalname || "").toLowerCase();
-  const acceptedExtensions = new Set([".m4a", ".mp3"]);
-  const acceptedMimeTypes = new Set(["audio/mp4", "audio/m4a", "audio/x-m4a", "audio/mpeg", "audio/mp3"]);
-  if (!acceptedExtensions.has(extension) && !acceptedMimeTypes.has(String(file.mimetype || "").toLowerCase())) {
-    fs.rmSync(file.path, { force: true });
-    throw new Error("Only M4A and MP3 files are supported.");
-  }
-
-  const finalExtension = acceptedExtensions.has(extension) ? extension : ".m4a";
-  const finalPath = getParticipantAudioAbsolutePath(participantId, finalExtension);
-  clearParticipantAudioFiles(participantId);
-  fs.renameSync(file.path, finalPath);
-  return finalPath;
-}
-
-function getAudioMimeType(audioFilePath) {
-  const extension = path.extname(String(audioFilePath || "")).toLowerCase();
-  if (extension === ".mp3") return "audio/mpeg";
-  return "audio/mp4";
-}
-
 function normalizeEmbedHtml(embedHtml) {
   const rawValue = String(embedHtml || "").trim();
 
@@ -608,7 +582,6 @@ function decorateParticipant(participant) {
     ...participant,
     embed_html: normalizeEmbedHtml(participant.embed_html),
     audio_url: buildParticipantAudioUrl(participant.audio_file_path),
-    audio_mime_type: getAudioMimeType(participant.audio_file_path),
   };
 }
 
@@ -1140,22 +1113,24 @@ function adminStats() {
   return { totals, leaderboard, recentVotes, recentUsers, participants, polls, pollsWithParticipants };
 }
 
-async function populateParticipantAudio(participantId, file) {
-  if (!file) {
-    throw new Error("M4A or MP3 file is required for manual upload.");
+function populateParticipantEmbed(participantId, embedHtml) {
+  const normalizedEmbedHtml = normalizeEmbedHtml(embedHtml);
+  if (!normalizedEmbedHtml) {
+    throw new Error("Iframe or source URL is required.");
   }
 
-  const audioFilePath = saveUploadedAudioFile(participantId, file);
+  clearParticipantAudioFiles(participantId);
 
   db.prepare(`
     UPDATE participants
     SET embed_html = ?, audio_file_path = ?, audio_source_url = ?, audio_source_type = ?, updated_at = ?
     WHERE id = ?
   `).run(
+    normalizedEmbedHtml,
     "",
-    audioFilePath,
     "",
-    "upload",
+    "",
+    "",
     nowIso(),
     participantId,
   );
@@ -1892,14 +1867,12 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
   res.redirect("/admin");
 });
 
-app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async (req, res) => {
+app.post("/admin/participants", ensureAdmin, (req, res) => {
   const pollId = Number(req.body.poll_id);
   const name = String(req.body.name || "").trim();
+  const embedHtml = String(req.body.embed_html || "").trim();
 
-  if (!pollId || !name || !req.file) {
-    if (req.file?.path) {
-      fs.rmSync(req.file.path, { force: true });
-    }
+  if (!pollId || !name || !embedHtml) {
     return res.redirect("/admin");
   }
 
@@ -1912,33 +1885,28 @@ app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async 
   const participantId = Number(result.lastInsertRowid);
 
   try {
-    await populateParticipantAudio(participantId, req.file);
+    populateParticipantEmbed(participantId, embedHtml);
     res.redirect("/admin");
   } catch (error) {
     clearParticipantAudioFiles(participantId);
     db.prepare("DELETE FROM participants WHERE id = ?").run(participantId);
-    if (req.file?.path) {
-      fs.rmSync(req.file.path, { force: true });
-    }
     res.status(400).render("error", {
-      title: "Ошибка загрузки аудио",
-      message: error.message || "Не удалось подготовить аудиофайл участника.",
+      title: "Ошибка сохранения iframe",
+      message: error.message || "Не удалось сохранить iframe участника.",
     });
   }
 });
 
-app.post("/admin/participants/:id/update", ensureAdmin, upload.single("audio_file"), async (req, res) => {
+app.post("/admin/participants/:id/update", ensureAdmin, (req, res) => {
   const id = Number(req.params.id);
   const name = String(req.body.name || "").trim();
+  const embedHtml = String(req.body.embed_html || "").trim();
 
   const participant = db
     .prepare("SELECT id FROM participants WHERE id = ?")
     .get(id);
 
   if (!participant || !name) {
-    if (req.file?.path) {
-      fs.rmSync(req.file.path, { force: true });
-    }
     return res.redirect("/admin");
   }
 
@@ -1948,20 +1916,17 @@ app.post("/admin/participants/:id/update", ensureAdmin, upload.single("audio_fil
     WHERE id = ?
   `).run(name, nowIso(), id);
 
-  if (!req.file) {
+  if (!embedHtml) {
     return res.redirect("/admin");
   }
 
   try {
-    await populateParticipantAudio(id, req.file);
+    populateParticipantEmbed(id, embedHtml);
     res.redirect("/admin");
   } catch (error) {
-    if (req.file?.path) {
-      fs.rmSync(req.file.path, { force: true });
-    }
     res.status(400).render("error", {
-      title: "Ошибка обновления аудио",
-      message: error.message || "Не удалось обновить аудиофайл участника.",
+      title: "Ошибка обновления iframe",
+      message: error.message || "Не удалось обновить iframe участника.",
     });
   }
 });
