@@ -288,6 +288,29 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+app.get("/media/external-image", async (req, res) => {
+  const src = String(req.query.src || "").trim();
+
+  if (!/^https?:\/\//i.test(src)) {
+    return res.status(400).send("Invalid image source.");
+  }
+
+  try {
+    const response = await fetch(src);
+    if (!response.ok) {
+      return res.status(response.status).send("Failed to load external image.");
+    }
+
+    const contentType = response.headers.get("content-type") || "application/octet-stream";
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(buffer);
+  } catch (error) {
+    res.status(502).send("Failed to proxy external image.");
+  }
+});
 app.use("/media", express.static(MEDIA_DIR));
 
 const upload = multer({
@@ -523,6 +546,16 @@ function buildParticipantAudioUrl(audioFilePath) {
   return fileName ? `/media/${encodeURIComponent(fileName)}` : "";
 }
 
+function buildParticipantImageUrl(imagePath) {
+  const normalized = String(imagePath || "").trim();
+  if (!normalized) return "";
+  if (/^https?:\/\//i.test(normalized)) {
+    return `/media/external-image?src=${encodeURIComponent(normalized)}`;
+  }
+
+  return buildPollImageUrl(normalized);
+}
+
 function isDirectAudioUrl(value) {
   const normalized = String(value || "").trim();
 
@@ -697,7 +730,7 @@ function decorateParticipant(participant) {
 
   return {
     ...participant,
-    image_url: resolvePollImageUrl(participant.image_url),
+    image_url: buildParticipantImageUrl(participant.image_url),
     embed_html: "",
     audio_url: buildParticipantAudioUrl(participant.audio_file_path),
     playback_url: directAudioUrl || buildParticipantAudioUrl(participant.audio_file_path),
