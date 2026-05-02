@@ -14,27 +14,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   initBlindPlayers();
+  initTelegramLoginWidgets();
 });
 
 function initBlindPlayers() {
   const cards = document.querySelectorAll("[data-listen-card]");
   if (!cards.length) {
     return;
-  }
-
-  const modal = document.querySelector("[data-player-modal]");
-  const modalFrame = document.querySelector("[data-player-modal-frame]");
-  const closeButton = document.querySelector("[data-player-close]");
-
-  if (closeButton && modal && modalFrame) {
-    closeButton.addEventListener("click", () => {
-      modal.close();
-      modalFrame.replaceChildren();
-    });
-
-    modal.addEventListener("close", () => {
-      modalFrame.replaceChildren();
-    });
   }
 
   cards.forEach((card) => {
@@ -68,12 +54,9 @@ function initBlindPlayers() {
         console.error("Failed to save listen", error);
       }
 
-      if (modal && modalFrame) {
-        modalFrame.replaceChildren(createPlayerIframe(playerSrc));
-        modal.showModal();
-      }
+      window.open(playerSrc, "_blank", "noopener,noreferrer");
 
-      status.textContent = "Плеер открыт. Прослушивание учтено в статистике.";
+      status.textContent = "Плеер открыт в новой вкладке. Прослушивание учтено в статистике.";
 
       window.setTimeout(() => {
         trigger.disabled = false;
@@ -82,13 +65,41 @@ function initBlindPlayers() {
   });
 }
 
-function createPlayerIframe(src) {
-  const iframe = document.createElement("iframe");
-  iframe.src = src;
-  iframe.loading = "eager";
-  iframe.allow = "autoplay; encrypted-media";
-  iframe.referrerPolicy = "strict-origin-when-cross-origin";
-  iframe.title = "Плеер записи";
-  iframe.setAttribute("frameborder", "0");
-  return iframe;
+function initTelegramLoginWidgets() {
+  const boxes = document.querySelectorAll("[data-telegram-login-box]");
+  if (!boxes.length) {
+    return;
+  }
+
+  boxes.forEach((box) => {
+    const trigger = box.querySelector("[data-telegram-login-trigger]");
+    const slot = box.querySelector("[data-telegram-login-slot]");
+    const botUsername = box.dataset.telegramLogin;
+    const authUrl = box.dataset.telegramAuthUrl;
+
+    if (!trigger || !slot || !botUsername || !authUrl) {
+      return;
+    }
+
+    trigger.addEventListener("click", () => {
+      if (slot.dataset.loaded === "true") {
+        slot.hidden = false;
+        trigger.hidden = true;
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = "https://telegram.org/js/telegram-widget.js?23";
+      script.setAttribute("data-telegram-login", botUsername);
+      script.setAttribute("data-size", "large");
+      script.setAttribute("data-userpic", "false");
+      script.setAttribute("data-auth-url", authUrl);
+
+      slot.hidden = false;
+      slot.dataset.loaded = "true";
+      slot.appendChild(script);
+      trigger.hidden = true;
+    });
+  });
 }

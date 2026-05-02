@@ -58,15 +58,16 @@
             </form>
           <% } else { %>
             <% if (telegramConfigured) { %>
-              <div class="widget-wrap">
-                <script
-                  async
-                  src="https://telegram.org/js/telegram-widget.js?23"
-                  data-telegram-login="<%= telegramBotUsername %>"
-                  data-size="large"
-                  data-userpic="false"
-                  data-auth-url="<%= telegramAuthUrl %>"
-                ></script>
+              <div
+                class="widget-wrap telegram-login-box"
+                data-telegram-login-box
+                data-telegram-login="<%= telegramBotUsername %>"
+                data-telegram-auth-url="<%= telegramAuthUrl %>"
+              >
+                <button class="primary-button" type="button" data-telegram-login-trigger>
+                  Войти через Telegram
+                </button>
+                <div data-telegram-login-slot hidden></div>
               </div>
             <% } else { %>
               <div class="notice">
@@ -138,18 +139,6 @@
           </div>
         <% } %>
       </section>
-      <dialog class="blind-player-modal" data-player-modal>
-        <div class="blind-player-modal-card">
-          <div class="blind-player-modal-topbar">
-            <strong>Плеер записи</strong>
-            <button class="ghost-button" type="button" data-player-close>Закрыть</button>
-          </div>
-          <p class="blind-player-modal-hint">
-            Этот режим нужен как запасной вариант, если браузер заблокирует автозапуск.
-          </p>
-          <div class="blind-player-modal-frame" data-player-modal-frame></div>
-        </div>
-      </dialog>
       <footer class="site-footer">
         <span>© 2026 Witcher by <a href="https://mdsn.work" target="_blank" rel="noreferrer">MDSN</a> | All Rights Reserved | Powered by <a href="https://t.me/kelahselai" target="_blank" rel="noreferrer">Nicky</a></span>
       </footer>
