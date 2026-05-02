@@ -122,13 +122,13 @@
               <input type="url" name="source_url" placeholder="https://..." />
             </label>
             <label>
-              <span>Или загрузите MP3 вручную</span>
-              <input type="file" name="audio_file" accept=".mp3,audio/mpeg" />
+              <span>Или загрузите M4A вручную</span>
+              <input type="file" name="audio_file" accept=".m4a,audio/mp4,audio/x-m4a" />
             </label>
             <div class="participant-source-actions">
-              <button class="primary-button" type="submit" name="source_kind" value="smule">Скачать mp3 со Smule</button>
+              <button class="primary-button" type="submit" name="source_kind" value="smule">Скачать m4a со Smule</button>
               <button class="primary-button" type="submit" name="source_kind" value="bandlab">Скачать с BandLab</button>
-              <button class="ghost-button" type="submit" name="source_kind" value="upload">Загрузить MP3</button>
+              <button class="ghost-button" type="submit" name="source_kind" value="upload">Загрузить M4A</button>
             </div>
           </form>
         </article>
@@ -228,7 +228,7 @@
                             <% if (participant.audio_url) { %>
                               <div class="audio-admin-preview">
                                 <audio controls preload="none">
-                                  <source src="<%= participant.audio_url %>" type="audio/mpeg" />
+                                  <source src="<%= participant.audio_url %>" type="audio/mp4" />
                                 </audio>
                                 <span><%= participant.audio_source_type || "upload" %></span>
                                 <% if (participant.audio_source_url) { %>
@@ -236,9 +236,9 @@
                                 <% } %>
                               </div>
                             <% } else if (participant.embed_html) { %>
-                              <div class="notice">Есть старый embed, но MP3 еще не подготовлен.</div>
+                              <div class="notice">Есть старый embed, но M4A еще не подготовлен.</div>
                             <% } else { %>
-                              <div class="notice">MP3 еще не загружен.</div>
+                              <div class="notice">M4A еще не загружен.</div>
                             <% } %>
                           </td>
                           <td class="participant-stats-cell">
@@ -323,13 +323,13 @@
                                 <input type="url" name="source_url" value="<%= participant.audio_source_url || "" %>" placeholder="https://..." />
                               </label>
                               <label>
-                                <span>Или заменить MP3 вручную</span>
-                                <input type="file" name="audio_file" accept=".mp3,audio/mpeg" />
+                                <span>Или заменить M4A вручную</span>
+                                <input type="file" name="audio_file" accept=".m4a,audio/mp4,audio/x-m4a" />
                               </label>
                               <div class="participant-source-actions">
                                 <button class="primary-button" type="submit" name="source_kind" value="smule">Скачать со Smule</button>
                                 <button class="primary-button" type="submit" name="source_kind" value="bandlab">Скачать с BandLab</button>
-                                <button class="ghost-button" type="submit" name="source_kind" value="upload">Заменить MP3</button>
+                                <button class="ghost-button" type="submit" name="source_kind" value="upload">Заменить M4A</button>
                                 <button class="ghost-button" type="submit">Сохранить имя</button>
                               </div>
                             </form>

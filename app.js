@@ -527,12 +527,33 @@ function normalizeSmuleSourceUrl(sourceUrl) {
   }
 }
 
+function extractBandLabPostId(sourceUrl) {
+  const normalizedUrl = normalizeMediaSourceUrl(sourceUrl);
+
+  try {
+    const parsed = new URL(normalizedUrl);
+    const pathParts = parsed.pathname.split("/").filter(Boolean);
+    const postIndex = pathParts.findIndex((part) => part === "post");
+
+    if (postIndex !== -1 && pathParts[postIndex + 1]) {
+      return pathParts[postIndex + 1];
+    }
+  } catch (error) {
+    const match = normalizedUrl.match(/bandlab\.com\/post\/([a-f0-9-]+)/i);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  return "";
+}
+
 function pollImageBaseName(pollId) {
   return `poll-${pollId}`;
 }
 
 function getParticipantAudioAbsolutePath(participantId) {
-  return path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}.mp3`);
+  return path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}.m4a`);
 }
 
 function clearFilesByPrefix(prefix) {
@@ -651,41 +672,91 @@ async function resolveSmuleAudioUrl(sourceUrl) {
   return decodeSmuleMediaUrl(encodedMediaUrl);
 }
 
+async function resolveBandLabAudioUrl(sourceUrl) {
+  const postId = extractBandLabPostId(sourceUrl);
+
+  if (!postId) {
+    throw new Error("BandLab post ID was not found in the provided URL.");
+  }
+
+  const { stdout } = await execFileAsync("curl", [
+    "-s",
+    "-L",
+    "-A",
+    SMULE_USER_AGENT,
+    "--compressed",
+    `https://www.bandlab.com/api/v1.3/posts/${postId}`,
+  ]);
+
+  let payload;
+  try {
+    payload = JSON.parse(stdout);
+  } catch (error) {
+    throw new Error("BandLab returned an unreadable API response.");
+  }
+
+  const audioUrl = String(payload?.revision?.mixdown?.file || "").trim();
+  if (!audioUrl) {
+    throw new Error("BandLab mixdown file was not found for this post.");
+  }
+
+  return audioUrl;
+}
+
 async function downloadSmuleAudio(participantId, sourceUrl) {
   const decodedAudioUrl = await resolveSmuleAudioUrl(sourceUrl);
-  const finalMp3Path = getParticipantAudioAbsolutePath(participantId);
+  const finalAudioPath = getParticipantAudioAbsolutePath(participantId);
 
   clearParticipantAudioFiles(participantId);
 
-  await execFileAsync("ffmpeg", [
-    "-y",
-    "-loglevel",
-    "error",
-    "-nostdin",
-    "-i",
+  await execFileAsync("curl", [
+    "-s",
+    "-L",
     decodedAudioUrl,
-    "-vn",
-    "-codec:a",
-    "libmp3lame",
-    "-q:a",
-    "2",
-    finalMp3Path,
+    "-o",
+    finalAudioPath,
   ]);
 
-  if (!fs.existsSync(finalMp3Path)) {
+  if (!fs.existsSync(finalAudioPath)) {
     throw new Error("Smule audio file was not created.");
   }
 
-  return finalMp3Path;
+  return finalAudioPath;
+}
+
+async function downloadBandLabAudio(participantId, sourceUrl) {
+  const audioUrl = await resolveBandLabAudioUrl(sourceUrl);
+  const finalAudioPath = getParticipantAudioAbsolutePath(participantId);
+
+  clearParticipantAudioFiles(participantId);
+
+  await execFileAsync("curl", [
+    "-s",
+    "-L",
+    audioUrl,
+    "-o",
+    finalAudioPath,
+  ]);
+
+  if (!fs.existsSync(finalAudioPath)) {
+    throw new Error("BandLab audio file was not created.");
+  }
+
+  return finalAudioPath;
 }
 
 async function downloadAudioFromUrl(participantId, sourceUrl) {
   const normalizedUrl = normalizeMediaSourceUrl(sourceUrl);
   const outputTemplate = path.join(MEDIA_DIR, `${participantAudioBaseName(participantId)}.%(ext)s`);
-  const finalMp3Path = getParticipantAudioAbsolutePath(participantId);
+  const finalAudioPath = getParticipantAudioAbsolutePath(participantId);
 
-  if (detectAudioSourceType(normalizedUrl) === "smule") {
+  const sourceType = detectAudioSourceType(normalizedUrl);
+  if (sourceType === "smule") {
     return downloadSmuleAudio(participantId, normalizedUrl);
+  }
+
+  if (sourceType === "bandlab") {
+    return downloadBandLabAudio(participantId, normalizedUrl);
   }
 
   clearParticipantAudioFiles(participantId);
@@ -694,28 +765,28 @@ async function downloadAudioFromUrl(participantId, sourceUrl) {
     "--no-playlist",
     "--extract-audio",
     "--audio-format",
-    "mp3",
+    "m4a",
     "--output",
     outputTemplate,
     normalizedUrl,
   ]);
 
-  if (!fs.existsSync(finalMp3Path)) {
+  if (!fs.existsSync(finalAudioPath)) {
     const candidates = fs
       .readdirSync(MEDIA_DIR)
       .filter((fileName) => fileName.startsWith(`${participantAudioBaseName(participantId)}.`));
 
     const firstCandidate = candidates[0] ? path.join(MEDIA_DIR, candidates[0]) : "";
     if (firstCandidate && fs.existsSync(firstCandidate)) {
-      fs.renameSync(firstCandidate, finalMp3Path);
+      fs.renameSync(firstCandidate, finalAudioPath);
     }
   }
 
-  if (!fs.existsSync(finalMp3Path)) {
+  if (!fs.existsSync(finalAudioPath)) {
     throw new Error("Downloaded audio file was not created.");
   }
 
-  return finalMp3Path;
+  return finalAudioPath;
 }
 
 function saveUploadedAudioFile(participantId, file) {
@@ -724,9 +795,10 @@ function saveUploadedAudioFile(participantId, file) {
   }
 
   const extension = path.extname(file.originalname || "").toLowerCase();
-  if (extension !== ".mp3" && file.mimetype !== "audio/mpeg") {
+  const acceptedMimeTypes = new Set(["audio/mp4", "audio/m4a", "audio/x-m4a"]);
+  if (extension !== ".m4a" && !acceptedMimeTypes.has(String(file.mimetype || "").toLowerCase())) {
     fs.rmSync(file.path, { force: true });
-    throw new Error("Only MP3 files are supported.");
+    throw new Error("Only M4A files are supported.");
   }
 
   const finalPath = getParticipantAudioAbsolutePath(participantId);
@@ -1308,7 +1380,7 @@ async function populateParticipantAudio(participantId, sourceKind, sourceUrl, fi
 
   if (resolvedSourceType === "upload") {
     if (!file) {
-      throw new Error("MP3 file is required for manual upload.");
+      throw new Error("M4A file is required for manual upload.");
     }
     audioFilePath = saveUploadedAudioFile(participantId, file);
   } else {
@@ -2097,7 +2169,7 @@ app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async 
       fs.rmSync(req.file.path, { force: true });
     }
     res.status(400).render("error", {
-      title: "Ошибка загрузки MP3",
+      title: "Ошибка загрузки аудио",
       message: error.message || "Не удалось подготовить аудиофайл участника.",
     });
   }
@@ -2144,7 +2216,7 @@ app.post("/admin/participants/:id/update", ensureAdmin, upload.single("audio_fil
       fs.rmSync(req.file.path, { force: true });
     }
     res.status(400).render("error", {
-      title: "Ошибка обновления MP3",
+      title: "Ошибка обновления аудио",
       message: error.message || "Не удалось обновить аудиофайл участника.",
     });
   }
