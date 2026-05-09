@@ -21,6 +21,7 @@ const SESSION_SECRET =
 const REGISTRATIONS_CSV_URL =
   process.env.REGISTRATIONS_CSV_URL ||
   "https://nbg1.your-objectstorage.com/nassal2026/registrations/nassal2026_registrations.csv";
+const MAX_AUDIO_UPLOAD_MB = Number(process.env.MAX_AUDIO_UPLOAD_MB || 50);
 const DB_PATH =
   process.env.DB_PATH || path.join(__dirname, "storage", "voting.sqlite");
 const STORAGE_DIR = path.dirname(DB_PATH);
@@ -321,7 +322,7 @@ app.use("/media", express.static(MEDIA_DIR));
 const upload = multer({
   dest: TMP_UPLOAD_DIR,
   limits: {
-    fileSize: 50 * 1024 * 1024,
+    fileSize: MAX_AUDIO_UPLOAD_MB * 1024 * 1024,
   },
 });
 
@@ -2424,6 +2425,17 @@ app.post("/admin/users/:id/reset-votes", ensureAdmin, (req, res) => {
 
   resetVotesTx();
   res.redirect("/admin");
+});
+
+app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).render("error", {
+      title: "Файл слишком большой",
+      message: `Размер аудиофайла превышает лимит ${MAX_AUDIO_UPLOAD_MB} МБ.`,
+    });
+  }
+
+  return next(error);
 });
 
 app.use((req, res) => {
