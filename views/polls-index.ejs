@@ -54,7 +54,7 @@
           <% polls.forEach((poll) => { %>
             <article class="mini-card">
               <% if (poll.image_url) { %>
-                <img class="mini-card-cover" src="<%= poll.image_url %>" alt="<%= poll.title %>" />
+                <img class="mini-card-cover mini-card-cover-top" src="<%= poll.image_url %>" alt="<%= poll.title %>" />
               <% } %>
               <div>
                 <strong><%= poll.title %></strong>

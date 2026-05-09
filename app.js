@@ -571,6 +571,45 @@ function isDirectAudioUrl(value) {
   return /\.(mp3|m4a|aac|ogg|oga|wav|flac)(?:[?#].*)?$/i.test(normalized);
 }
 
+function isSupportedAudioUpload(file) {
+  const originalName = String(file?.originalname || "").toLowerCase();
+  const extension = path.extname(originalName);
+  const allowedExtensions = new Set([".mp3", ".m4a", ".aac", ".ogg", ".oga", ".wav", ".flac"]);
+  const mimeType = String(file?.mimetype || "").toLowerCase();
+
+  if (allowedExtensions.has(extension)) {
+    return { valid: true, extension };
+  }
+
+  if (
+    mimeType.startsWith("audio/") ||
+    mimeType === "application/ogg" ||
+    mimeType === "application/octet-stream"
+  ) {
+    return { valid: true, extension: extension || ".m4a" };
+  }
+
+  return { valid: false, extension };
+}
+
+function saveParticipantAudioFile(participantId, file) {
+  if (!file) {
+    throw new Error("No uploaded audio provided.");
+  }
+
+  const validation = isSupportedAudioUpload(file);
+  if (!validation.valid) {
+    fs.rmSync(file.path, { force: true });
+    throw new Error("Only MP3, M4A, AAC, OGG, WAV, and FLAC audio files are supported.");
+  }
+
+  clearParticipantAudioFiles(participantId);
+
+  const finalPath = getParticipantAudioAbsolutePath(participantId, validation.extension || ".m4a");
+  fs.renameSync(file.path, finalPath);
+  return finalPath;
+}
+
 function buildPollImageUrl(imagePath) {
   const normalized = String(imagePath || "").trim();
   if (!normalized) return "";
@@ -1382,10 +1421,28 @@ function adminStats() {
   return { totals, leaderboard, recentVotes, recentUsers, participants, polls, pollsWithParticipants };
 }
 
-function populateParticipantEmbed(participantId, embedHtml) {
+function populateParticipantEmbed(participantId, embedHtml, audioFile) {
   const rawValue = String(embedHtml || "").trim();
-  if (!rawValue) {
-    throw new Error("Direct audio URL is required.");
+
+  if (!rawValue && !audioFile) {
+    throw new Error("Direct audio URL or uploaded audio file is required.");
+  }
+
+  if (audioFile) {
+    const savedFilePath = saveParticipantAudioFile(participantId, audioFile);
+    db.prepare(`
+      UPDATE participants
+      SET embed_html = ?, audio_file_path = ?, audio_source_url = ?, audio_source_type = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      "",
+      savedFilePath,
+      "",
+      "uploaded_file",
+      nowIso(),
+      participantId,
+    );
+    return;
   }
 
   clearParticipantAudioFiles(participantId);
@@ -2179,13 +2236,14 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
   res.redirect("/admin");
 });
 
-app.post("/admin/participants", ensureAdmin, async (req, res) => {
+app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async (req, res) => {
   const pollId = Number(req.body.poll_id);
   const registrationKey = String(req.body.registration_key || "").trim();
   const embedHtml = String(req.body.embed_html || "").trim();
   const songTitle = String(req.body.song_title || "").trim();
+  const audioFile = req.file || null;
 
-  if (!pollId || !registrationKey || !embedHtml) {
+  if (!pollId || !registrationKey || (!embedHtml && !audioFile)) {
     return res.redirect("/admin");
   }
 
@@ -2215,9 +2273,12 @@ app.post("/admin/participants", ensureAdmin, async (req, res) => {
   const participantId = Number(result.lastInsertRowid);
 
   try {
-    populateParticipantEmbed(participantId, embedHtml);
+    populateParticipantEmbed(participantId, embedHtml, audioFile);
     res.redirect("/admin");
   } catch (error) {
+    if (audioFile?.path) {
+      fs.rmSync(audioFile.path, { force: true });
+    }
     clearParticipantAudioFiles(participantId);
     db.prepare("DELETE FROM participants WHERE id = ?").run(participantId);
     res.status(400).render("error", {
@@ -2227,11 +2288,12 @@ app.post("/admin/participants", ensureAdmin, async (req, res) => {
   }
 });
 
-app.post("/admin/participants/:id/update", ensureAdmin, async (req, res) => {
+app.post("/admin/participants/:id/update", ensureAdmin, upload.single("audio_file"), async (req, res) => {
   const id = Number(req.params.id);
   const registrationKey = String(req.body.registration_key || "").trim();
   const embedHtml = String(req.body.embed_html || "").trim();
   const songTitle = String(req.body.song_title || "").trim();
+  const audioFile = req.file || null;
 
   const participant = db
     .prepare("SELECT id FROM participants WHERE id = ?")
@@ -2264,14 +2326,17 @@ app.post("/admin/participants/:id/update", ensureAdmin, async (req, res) => {
     WHERE id = ?
   `).run(registration.participants, songTitle, registration.avatar_url, nowIso(), id);
 
-  if (!embedHtml) {
+  if (!embedHtml && !audioFile) {
     return res.redirect("/admin");
   }
 
   try {
-    populateParticipantEmbed(id, embedHtml);
+    populateParticipantEmbed(id, embedHtml, audioFile);
     res.redirect("/admin");
   } catch (error) {
+    if (audioFile?.path) {
+      fs.rmSync(audioFile.path, { force: true });
+    }
     res.status(400).render("error", {
       title: "Ошибка обновления аудиоссылки",
       message: error.message || "Не удалось обновить аудиоссылку участника.",

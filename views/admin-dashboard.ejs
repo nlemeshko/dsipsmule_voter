@@ -106,7 +106,7 @@
           <% if (registrationsError) { %>
             <div class="notice notice-error"><%= registrationsError %></div>
           <% } %>
-          <form class="stack-form" method="post" action="/admin/participants">
+          <form class="stack-form" method="post" action="/admin/participants" enctype="multipart/form-data">
             <label>
               <span>Голосование</span>
               <select name="poll_id" required>
@@ -129,7 +129,11 @@
             </label>
             <label>
               <span>Прямая аудиоссылка</span>
-              <textarea name="embed_html" rows="4" placeholder="https://.../track.m4a или https://.../track.mp3" required></textarea>
+              <textarea name="embed_html" rows="4" placeholder="https://.../track.m4a или https://.../track.mp3"></textarea>
+            </label>
+            <label>
+              <span>Или аудиофайл</span>
+              <input type="file" name="audio_file" accept=".mp3,.m4a,.aac,.ogg,.oga,.wav,.flac,audio/*" />
             </label>
             <label>
               <span>Название песни</span>
@@ -332,7 +336,7 @@
                             </details>
                           </td>
                           <td class="participant-edit-cell">
-                            <form class="stack-form participant-edit-form" method="post" action="/admin/participants/<%= participant.id %>/update">
+                            <form class="stack-form participant-edit-form" method="post" action="/admin/participants/<%= participant.id %>/update" enctype="multipart/form-data">
                               <label>
                                 <span>Участник из регистраций</span>
                                 <select name="registration_key" required>
@@ -350,6 +354,10 @@
                               <label>
                                 <span>Новая прямая аудиоссылка</span>
                                 <textarea name="embed_html" rows="4" placeholder="https://.../track.m4a или https://.../track.mp3"><%= participant.audio_source_url || "" %></textarea>
+                              </label>
+                              <label>
+                                <span>Или новый аудиофайл</span>
+                                <input type="file" name="audio_file" accept=".mp3,.m4a,.aac,.ogg,.oga,.wav,.flac,audio/*" />
                               </label>
                               <label>
                                 <span>Название песни</span>

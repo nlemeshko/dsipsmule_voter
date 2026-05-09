@@ -1425,6 +1425,10 @@ td {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.mini-card-cover-top {
+  object-position: center 24%;
+}
+
 .mini-card strong {
   display: block;
   width: 100%;
