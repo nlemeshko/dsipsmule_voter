@@ -447,6 +447,8 @@ textarea:focus-visible,
 
 .contestant-copy {
   padding: 22px;
+  display: grid;
+  gap: 14px;
 }
 
 .contestant-copy h2 {
@@ -457,6 +459,33 @@ textarea:focus-visible,
   word-break: normal;
   overflow-wrap: anywhere;
   text-align: center;
+}
+
+.contestant-lyrics {
+  border: 1px solid rgba(215, 224, 234, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.contestant-lyrics summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 18px;
+  text-align: center;
+  color: #f3f6fa;
+  font-weight: 700;
+}
+
+.contestant-lyrics summary::-webkit-details-marker {
+  display: none;
+}
+
+.contestant-lyrics-body {
+  white-space: pre-wrap;
+  padding: 0 18px 18px;
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .contestant form {
@@ -1251,6 +1280,11 @@ td {
   line-height: 1.35;
 }
 
+.participant-song-meta {
+  color: rgba(143, 224, 167, 0.92);
+  font-size: 0.92rem;
+}
+
 .participant-avatar,
 .participant-avatar-fallback {
   width: 52px;
@@ -1265,6 +1299,16 @@ td {
   background: linear-gradient(180deg, rgba(143, 168, 193, 0.2), rgba(78, 100, 123, 0.18));
   color: #f8fbff;
   font-weight: 800;
+}
+
+.participant-song-cover {
+  display: block;
+  width: 96px;
+  height: 96px;
+  margin-top: 10px;
+  border-radius: 18px;
+  object-fit: cover;
+  border: 1px solid rgba(215, 224, 232, 0.16);
 }
 
 .admin-witcher-choice {

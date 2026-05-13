@@ -119,6 +119,19 @@
                     <div class="notice">Аудиоссылка для этой записи еще не добавлена.</div>
                   <% } %>
                 </div>
+                <% if (participant.description || participant.lyrics_text) { %>
+                  <div class="contestant-copy">
+                    <% if (participant.description) { %>
+                      <h2><%= participant.description %></h2>
+                    <% } %>
+                    <% if (participant.lyrics_text) { %>
+                      <details class="contestant-lyrics">
+                        <summary>Открыть текст песни</summary>
+                        <div class="contestant-lyrics-body"><%= participant.lyrics_text %></div>
+                      </details>
+                    <% } %>
+                  </div>
+                <% } %>
                 <form method="post" action="/vote">
                   <input type="hidden" name="poll_id" value="<%= poll.id %>" />
                   <input type="hidden" name="poll_slug" value="<%= poll.slug %>" />

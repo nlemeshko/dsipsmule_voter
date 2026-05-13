@@ -81,6 +81,8 @@ db.exec(`
     name TEXT NOT NULL,
     description TEXT,
     image_url TEXT,
+    song_image_url TEXT,
+    lyrics_text TEXT,
     embed_html TEXT,
     audio_file_path TEXT,
     audio_source_url TEXT,
@@ -172,6 +174,14 @@ if (!voteColumns.includes("loser_participant_ids_json")) {
 
 if (!participantColumns.includes("embed_html")) {
   db.exec("ALTER TABLE participants ADD COLUMN embed_html TEXT");
+}
+
+if (!participantColumns.includes("song_image_url")) {
+  db.exec("ALTER TABLE participants ADD COLUMN song_image_url TEXT");
+}
+
+if (!participantColumns.includes("lyrics_text")) {
+  db.exec("ALTER TABLE participants ADD COLUMN lyrics_text TEXT");
 }
 
 if (!participantColumns.includes("audio_file_path")) {
@@ -523,6 +533,10 @@ function participantAudioBaseName(participantId) {
   return `participant-${participantId}`;
 }
 
+function participantSongImageBaseName(participantId) {
+  return `participant-song-image-${participantId}`;
+}
+
 function pollImageBaseName(pollId) {
   return `poll-${pollId}`;
 }
@@ -541,6 +555,10 @@ function clearFilesByPrefix(prefix) {
 
 function clearParticipantAudioFiles(participantId) {
   clearFilesByPrefix(`${participantAudioBaseName(participantId)}.`);
+}
+
+function clearParticipantSongImageFiles(participantId) {
+  clearFilesByPrefix(`${participantSongImageBaseName(participantId)}.`);
 }
 
 function clearPollImageFiles(pollId) {
@@ -609,6 +627,28 @@ function saveParticipantAudioFile(participantId, file) {
   const finalPath = getParticipantAudioAbsolutePath(participantId, validation.extension || ".m4a");
   fs.renameSync(file.path, finalPath);
   return finalPath;
+}
+
+function saveParticipantSongImageFile(participantId, file) {
+  const originalName = String(file?.originalname || "").toLowerCase();
+  const extension = path.extname(originalName);
+  const allowedExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+
+  if (!file) {
+    throw new Error("No uploaded song image provided.");
+  }
+
+  if (!allowedExtensions.has(extension) && String(file.mimetype || "").indexOf("image/") !== 0) {
+    fs.rmSync(file.path, { force: true });
+    throw new Error("Only JPG, PNG, WEBP, and GIF song cover images are supported.");
+  }
+
+  clearParticipantSongImageFiles(participantId);
+
+  const safeExtension = allowedExtensions.has(extension) ? extension : ".jpg";
+  const finalPath = path.join(MEDIA_DIR, `${participantSongImageBaseName(participantId)}${safeExtension}`);
+  fs.renameSync(file.path, finalPath);
+  return buildPollImageUrl(finalPath);
 }
 
 function buildPollImageUrl(imagePath) {
@@ -794,10 +834,24 @@ function decorateParticipant(participant) {
   return {
     ...participant,
     image_url: buildParticipantImageUrl(participant.image_url),
+    song_image_url: buildPollImageUrl(participant.song_image_url),
     embed_html: "",
     audio_url: buildParticipantAudioUrl(participant.audio_file_path),
     playback_url: directAudioUrl || buildParticipantAudioUrl(participant.audio_file_path),
   };
+}
+
+function persistParticipantSongImage(participantId, songImageFile) {
+  if (!songImageFile) {
+    return;
+  }
+
+  const songImageUrl = saveParticipantSongImageFile(participantId, songImageFile);
+  db.prepare(`
+    UPDATE participants
+    SET song_image_url = ?, updated_at = ?
+    WHERE id = ?
+  `).run(songImageUrl, nowIso(), participantId);
 }
 
 function resolvePollImageUrl(imageUrl) {
@@ -965,7 +1019,7 @@ function getPollBySlug(slug) {
 function getActiveParticipants(pollId) {
   return db
     .prepare(`
-      SELECT id, name, description, image_url, embed_html, audio_file_path, audio_source_url, audio_source_type
+      SELECT id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type
       FROM participants
       WHERE poll_id = ? AND is_active = 1
       ORDER BY id ASC
@@ -979,7 +1033,7 @@ function getParticipantsByIds(ids, pollId) {
   const placeholders = ids.map(() => "?").join(", ");
   const rows = db
     .prepare(
-      `SELECT id, name, description, image_url, embed_html, audio_file_path, audio_source_url, audio_source_type FROM participants WHERE poll_id = ? AND id IN (${placeholders})`,
+      `SELECT id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type FROM participants WHERE poll_id = ? AND id IN (${placeholders})`,
     )
     .all(pollId, ...ids);
 
@@ -1147,7 +1201,7 @@ function getPollReportData(pollId) {
 
   const participants = db
     .prepare(`
-      SELECT id, name, embed_html, audio_file_path, audio_source_url, audio_source_type, witcher_choice, is_active, created_at, updated_at
+      SELECT id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type, witcher_choice, is_active, created_at, updated_at
       FROM participants
       WHERE poll_id = ?
       ORDER BY created_at ASC, id ASC
@@ -1288,6 +1342,8 @@ function adminStats() {
         p.name,
         p.description,
         p.image_url,
+        p.song_image_url,
+        p.lyrics_text,
         p.embed_html,
         p.audio_file_path,
         p.audio_source_url,
@@ -1396,7 +1452,7 @@ function adminStats() {
 
   const participants = db
     .prepare(`
-      SELECT p.id, p.name, p.description, p.image_url, p.embed_html, p.audio_file_path, p.audio_source_url, p.audio_source_type, p.witcher_choice, p.is_active, p.created_at, p.updated_at, p.poll_id, poll.title AS poll_title, poll.slug AS poll_slug
+      SELECT p.id, p.name, p.description, p.image_url, p.song_image_url, p.lyrics_text, p.embed_html, p.audio_file_path, p.audio_source_url, p.audio_source_type, p.witcher_choice, p.is_active, p.created_at, p.updated_at, p.poll_id, poll.title AS poll_title, poll.slug AS poll_slug
       FROM participants p
       LEFT JOIN polls poll ON poll.id = p.poll_id
       ORDER BY p.created_at DESC
@@ -2237,12 +2293,17 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
   res.redirect("/admin");
 });
 
-app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async (req, res) => {
+app.post("/admin/participants", ensureAdmin, upload.fields([
+  { name: "audio_file", maxCount: 1 },
+  { name: "song_image_file", maxCount: 1 },
+]), async (req, res) => {
   const pollId = Number(req.body.poll_id);
   const registrationKey = String(req.body.registration_key || "").trim();
   const embedHtml = String(req.body.embed_html || "").trim();
   const songTitle = String(req.body.song_title || "").trim();
-  const audioFile = req.file || null;
+  const lyricsText = String(req.body.lyrics_text || "").trim();
+  const audioFile = req.files?.audio_file?.[0] || null;
+  const songImageFile = req.files?.song_image_file?.[0] || null;
 
   if (!pollId || !registrationKey || (!embedHtml && !audioFile)) {
     return res.redirect("/admin");
@@ -2267,34 +2328,43 @@ app.post("/admin/participants", ensureAdmin, upload.single("audio_file"), async 
 
   const timestamp = nowIso();
   const result = db.prepare(`
-    INSERT INTO participants (poll_id, name, description, image_url, embed_html, audio_file_path, audio_source_url, audio_source_type, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-  `).run(pollId, registration.participants, songTitle, registration.avatar_url, "", "", "", "", timestamp, timestamp);
+    INSERT INTO participants (poll_id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(pollId, registration.participants, songTitle, registration.avatar_url, "", lyricsText, "", "", "", "", timestamp, timestamp);
 
   const participantId = Number(result.lastInsertRowid);
 
   try {
+    persistParticipantSongImage(participantId, songImageFile);
     populateParticipantEmbed(participantId, embedHtml, audioFile);
     res.redirect("/admin");
   } catch (error) {
-    if (audioFile?.path) {
-      fs.rmSync(audioFile.path, { force: true });
-    }
+    [audioFile, songImageFile].forEach((file) => {
+      if (file?.path) {
+        fs.rmSync(file.path, { force: true });
+      }
+    });
     clearParticipantAudioFiles(participantId);
+    clearParticipantSongImageFiles(participantId);
     db.prepare("DELETE FROM participants WHERE id = ?").run(participantId);
     res.status(400).render("error", {
-      title: "Ошибка сохранения аудиоссылки",
-      message: error.message || "Не удалось сохранить аудиоссылку участника.",
+      title: "Ошибка сохранения участника",
+      message: error.message || "Не удалось сохранить данные участника.",
     });
   }
 });
 
-app.post("/admin/participants/:id/update", ensureAdmin, upload.single("audio_file"), async (req, res) => {
+app.post("/admin/participants/:id/update", ensureAdmin, upload.fields([
+  { name: "audio_file", maxCount: 1 },
+  { name: "song_image_file", maxCount: 1 },
+]), async (req, res) => {
   const id = Number(req.params.id);
   const registrationKey = String(req.body.registration_key || "").trim();
   const embedHtml = String(req.body.embed_html || "").trim();
   const songTitle = String(req.body.song_title || "").trim();
-  const audioFile = req.file || null;
+  const lyricsText = String(req.body.lyrics_text || "").trim();
+  const audioFile = req.files?.audio_file?.[0] || null;
+  const songImageFile = req.files?.song_image_file?.[0] || null;
 
   const participant = db
     .prepare("SELECT id FROM participants WHERE id = ?")
@@ -2323,9 +2393,23 @@ app.post("/admin/participants/:id/update", ensureAdmin, upload.single("audio_fil
 
   db.prepare(`
     UPDATE participants
-    SET name = ?, description = ?, image_url = ?, updated_at = ?
+    SET name = ?, description = ?, image_url = ?, lyrics_text = ?, updated_at = ?
     WHERE id = ?
-  `).run(registration.participants, songTitle, registration.avatar_url, nowIso(), id);
+  `).run(registration.participants, songTitle, registration.avatar_url, lyricsText, nowIso(), id);
+
+  try {
+    persistParticipantSongImage(id, songImageFile);
+  } catch (error) {
+    [audioFile, songImageFile].forEach((file) => {
+      if (file?.path) {
+        fs.rmSync(file.path, { force: true });
+      }
+    });
+    return res.status(400).render("error", {
+      title: "Ошибка обновления обложки",
+      message: error.message || "Не удалось обновить обложку песни.",
+    });
+  }
 
   if (!embedHtml && !audioFile) {
     return res.redirect("/admin");
@@ -2395,6 +2479,7 @@ app.post("/admin/participants/:id/delete", ensureAdmin, (req, res) => {
 
   const deleteParticipantTx = db.transaction(() => {
     clearParticipantAudioFiles(id);
+    clearParticipantSongImageFiles(id);
     db.prepare("DELETE FROM participant_listens WHERE participant_id = ?").run(id);
     db.prepare(`
       DELETE FROM votes

@@ -139,6 +139,14 @@
               <span>Название песни</span>
               <input type="text" name="song_title" placeholder="Введите название песни" />
             </label>
+            <label>
+              <span>Обложка песни</span>
+              <input type="file" name="song_image_file" accept=".jpg,.jpeg,.png,.webp,.gif,image/*" />
+            </label>
+            <label>
+              <span>Текст песни</span>
+              <textarea name="lyrics_text" rows="6" placeholder="Вставьте текст песни, если хотите показать его по кнопке"></textarea>
+            </label>
             <div class="participant-source-actions">
               <button class="primary-button" type="submit">Сохранить источник</button>
             </div>
@@ -241,8 +249,14 @@
                                 <% if (participant.description) { %>
                                   <span class="participant-song-title"><%= participant.description %></span>
                                 <% } %>
+                                <% if (participant.lyrics_text) { %>
+                                  <span class="participant-song-meta">Текст песни добавлен</span>
+                                <% } %>
                               </div>
                             </div>
+                            <% if (participant.song_image_url) { %>
+                              <img class="participant-song-cover" src="<%= participant.song_image_url %>" alt="Обложка песни <%= participant.description || participant.name %>" />
+                            <% } %>
                             <% if (participant.witcher_choice) { %>
                               <span class="admin-witcher-choice">Выбор Ведьмака</span>
                             <% } %>
@@ -362,6 +376,14 @@
                               <label>
                                 <span>Название песни</span>
                                 <input type="text" name="song_title" value="<%= participant.description || "" %>" placeholder="Введите название песни" />
+                              </label>
+                              <label>
+                                <span>Новая обложка песни</span>
+                                <input type="file" name="song_image_file" accept=".jpg,.jpeg,.png,.webp,.gif,image/*" />
+                              </label>
+                              <label>
+                                <span>Текст песни</span>
+                                <textarea name="lyrics_text" rows="6" placeholder="Вставьте текст песни, если хотите показать его по кнопке"><%= participant.lyrics_text || "" %></textarea>
                               </label>
                               <div class="participant-source-actions">
                                 <button class="primary-button" type="submit">Сохранить изменения</button>
