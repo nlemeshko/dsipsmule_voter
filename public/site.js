@@ -467,9 +467,22 @@ function createAudioVisualizer(player, canvas) {
 
     canvas.width = width;
     canvas.height = height;
+    if (!context) {
+      context = canvas.getContext("2d");
+    }
   }
 
   function renderFrame() {
+    if (!context) {
+      context = canvas.getContext("2d");
+    }
+
+    if (!context) {
+      animationFrameId = 0;
+      started = false;
+      return;
+    }
+
     var width = canvas.width;
     var height = canvas.height;
     var lineCount = 4;
@@ -514,6 +527,10 @@ function createAudioVisualizer(player, canvas) {
 
   function start() {
     resizeCanvas();
+
+    if (!context) {
+      return;
+    }
 
     if (started) {
       return;
