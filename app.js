@@ -830,11 +830,14 @@ function decorateParticipant(participant) {
   const directAudioUrl = participant.audio_source_type === "external_url"
     ? String(participant.audio_source_url || "").trim()
     : "";
+  const imageUrl = buildParticipantImageUrl(participant.image_url);
+  const songImageUrl = buildPollImageUrl(participant.song_image_url);
 
   return {
     ...participant,
-    image_url: buildParticipantImageUrl(participant.image_url),
-    song_image_url: buildPollImageUrl(participant.song_image_url),
+    image_url: imageUrl,
+    song_image_url: songImageUrl || imageUrl,
+    has_song_image: Boolean(songImageUrl),
     embed_html: "",
     audio_url: buildParticipantAudioUrl(participant.audio_file_path),
     playback_url: directAudioUrl || buildParticipantAudioUrl(participant.audio_file_path),
@@ -1476,6 +1479,43 @@ function adminStats() {
   });
 
   return { totals, leaderboard, recentVotes, recentUsers, participants, polls, pollsWithParticipants };
+}
+
+function getAdminPlayData(selectedPollId) {
+  const polls = getPolls();
+  const fallbackPollId = polls[0]?.id || null;
+  const normalizedPollId = Number(selectedPollId) || fallbackPollId;
+  const selectedPoll = polls.find((poll) => poll.id === normalizedPollId) || polls[0] || null;
+
+  if (!selectedPoll) {
+    return {
+      polls,
+      selectedPoll: null,
+      participants: [],
+    };
+  }
+
+  const participants = db
+    .prepare(`
+      SELECT id, poll_id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type, is_active, witcher_choice, created_at, updated_at
+      FROM participants
+      WHERE poll_id = ?
+      ORDER BY is_active DESC, created_at ASC, id ASC
+    `)
+    .all(selectedPoll.id)
+    .map(decorateParticipant)
+    .map((participant, index) => ({
+      ...participant,
+      orderNumber: index + 1,
+    }));
+  const initialParticipantId = participants.find((participant) => participant.playback_url)?.id || participants[0]?.id || null;
+
+  return {
+    polls,
+    selectedPoll,
+    participants,
+    initialParticipantId,
+  };
 }
 
 function populateParticipantEmbed(participantId, embedHtml, audioFile) {
@@ -2143,6 +2183,15 @@ app.get("/admin", ensureAdmin, async (req, res) => {
       registrationsError: error.message || "Не удалось загрузить список регистраций.",
     });
   }
+});
+
+app.get("/admin/play", ensureAdmin, (req, res) => {
+  const playData = getAdminPlayData(req.query.poll_id);
+
+  res.render("admin-play", {
+    ...playData,
+    baseUrl: BASE_URL,
+  });
 });
 
 app.post("/admin/polls", ensureAdmin, upload.single("image_file"), (req, res) => {

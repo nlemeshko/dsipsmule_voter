@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Play | Админка голосования</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Amatic+SC:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell play-shell">
+      <section class="dashboard-topbar">
+        <div>
+          <span class="eyebrow">Admin only</span>
+          <h1>Play</h1>
+        </div>
+        <div class="dashboard-topbar-actions">
+          <a class="ghost-button" href="/admin">В админку</a>
+          <form method="post" action="/admin/logout">
+            <button class="ghost-button" type="submit">Выйти</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel play-stage-panel">
+        <div class="play-stage-copy">
+          <h2>Прослушивание по этапам</h2>
+          <p>Выберите этап и слушайте участников по очереди на отдельной странице с полными данными по песне.</p>
+        </div>
+
+        <form class="play-stage-form" method="get" action="/admin/play">
+          <label>
+            <span>Этап</span>
+            <select name="poll_id" onchange="this.form.submit()">
+              <% polls.forEach((poll) => { %>
+                <option value="<%= poll.id %>" <%= selectedPoll && selectedPoll.id === poll.id ? "selected" : "" %>>
+                  <%= poll.title %>
+                </option>
+              <% }) %>
+            </select>
+          </label>
+          <noscript>
+            <button class="primary-button" type="submit">Открыть этап</button>
+          </noscript>
+        </form>
+      </section>
+
+      <% if (!selectedPoll) { %>
+        <section class="panel">
+          <div class="notice">Этапов пока нет.</div>
+        </section>
+      <% } else { %>
+        <section
+          class="play-layout"
+          data-play-page="true"
+          data-play-poll-id="<%= selectedPoll.id %>"
+          data-play-base-url="<%= baseUrl %>"
+          data-play-initial-id="<%= initialParticipantId || '' %>"
+        >
+          <aside class="panel play-queue-panel">
+            <div class="play-queue-head">
+              <div>
+                <span class="eyebrow">Очередь</span>
+                <h2><%= selectedPoll.title %></h2>
+              </div>
+              <span class="play-queue-count">Треков: <%= participants.length %></span>
+            </div>
+
+            <% if (selectedPoll.description) { %>
+              <p class="play-queue-description"><%= selectedPoll.description %></p>
+            <% } %>
+
+            <div class="play-queue-list" role="tablist" aria-label="Список участников этапа">
+              <% participants.forEach((participant) => { %>
+                <button
+                  class="play-queue-item <%= initialParticipantId === participant.id ? 'is-selected' : '' %>"
+                  type="button"
+                  data-play-select="<%= participant.id %>"
+                  data-has-audio="<%= participant.playback_url ? 'true' : 'false' %>"
+                  aria-selected="<%= initialParticipantId === participant.id ? 'true' : 'false' %>"
+                >
+                  <span class="play-queue-order"><%= participant.orderNumber %>.</span>
+                  <span class="play-queue-copy">
+                    <strong><%= participant.name %></strong>
+                    <span><%= participant.description || "Без названия песни" %></span>
+                  </span>
+                  <% if (!participant.is_active) { %>
+                    <span class="play-queue-flag">off</span>
+                  <% } %>
+                </button>
+              <% }) %>
+            </div>
+          </aside>
+
+          <section class="panel play-stage-view">
+            <% if (participants.length === 0) { %>
+              <div class="notice">В этом этапе пока нет участников.</div>
+            <% } else { %>
+              <% participants.forEach((participant) => { %>
+                <article
+                  class="play-card <%= initialParticipantId === participant.id ? 'is-active' : '' %>"
+                  data-play-card="<%= participant.id %>"
+                  <%= initialParticipantId === participant.id ? "" : "hidden" %>
+                >
+                  <div class="play-hero">
+                    <div class="play-hero-media">
+                      <% if (participant.song_image_url) { %>
+                        <img class="play-song-cover" src="<%= participant.song_image_url %>" alt="Обложка песни <%= participant.description || participant.name %>" />
+                      <% } else { %>
+                        <div class="play-song-cover play-song-cover-fallback"><span><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span></div>
+                      <% } %>
+                    </div>
+
+                    <div class="play-hero-copy">
+                      <div class="play-identity">
+                        <% if (participant.image_url) { %>
+                          <img class="play-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" />
+                        <% } else { %>
+                          <div class="play-avatar play-avatar-fallback"><span><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span></div>
+                        <% } %>
+
+                        <div>
+                          <span class="eyebrow">Участница</span>
+                          <h2><%= participant.name %></h2>
+                          <p class="play-song-title"><%= participant.description || "Без названия песни" %></p>
+                        </div>
+                      </div>
+
+                      <div class="play-badges">
+                        <span class="play-badge"><%= participant.is_active ? "Активна" : "Отключена" %></span>
+                        <% if (participant.witcher_choice) { %>
+                          <span class="play-badge">Выбор Ведьмака</span>
+                        <% } %>
+                        <span class="play-badge">№ <%= participant.orderNumber %></span>
+                      </div>
+
+                      <% if (participant.playback_url) { %>
+                        <div class="play-audio-block">
+                          <audio
+                            class="audio-player"
+                            controls
+                            preload="metadata"
+                            controlsList="nodownload noplaybackrate"
+                            src="<%= participant.playback_url %>"
+                            data-visualizer="true"
+                          ></audio>
+                        </div>
+                      <% } else { %>
+                        <div class="notice">Для этой участницы аудио пока не добавлено.</div>
+                      <% } %>
+
+                      <div class="play-actions">
+                        <button class="ghost-button" type="button" data-play-prev>Предыдущая</button>
+                        <button class="primary-button" type="button" data-play-next>Следующая</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="play-details-grid">
+                    <section class="play-detail-panel">
+                      <span class="eyebrow">Текст песни</span>
+                      <% if (participant.lyrics_text) { %>
+                        <pre class="play-lyrics"><%= participant.lyrics_text %></pre>
+                      <% } else { %>
+                        <div class="notice">Текст песни еще не добавлен.</div>
+                      <% } %>
+                    </section>
+
+                    <section class="play-detail-panel">
+                      <span class="eyebrow">Материалы</span>
+                      <div class="play-meta-list">
+                        <div>
+                          <strong>Имя участницы</strong>
+                          <span><%= participant.name %></span>
+                        </div>
+                        <div>
+                          <strong>Название песни</strong>
+                          <span><%= participant.description || "—" %></span>
+                        </div>
+                        <div>
+                          <strong>Фото участницы</strong>
+                          <span><%= participant.image_url ? "Добавлено" : "Не добавлено" %></span>
+                        </div>
+                        <div>
+                          <strong>Обложка песни</strong>
+                          <span><%= participant.has_song_image ? "Добавлена" : "Используется фото участницы" %></span>
+                        </div>
+                        <div>
+                          <strong>Аудио</strong>
+                          <span><%= participant.playback_url ? "Готово к воспроизведению" : "Не загружено" %></span>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </article>
+              <% }) %>
+            <% } %>
+          </section>
+        </section>
+      <% } %>
+    </main>
+
+    <script src="/site.js"></script>
+  </body>
+</html>

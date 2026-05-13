@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", function () {
   var preloader = document.getElementById("page-preloader");
   var audioPlayers = document.querySelectorAll("audio.audio-player");
+  var playPage = document.querySelector("[data-play-page='true']");
   var index;
 
   if (!preloader) {
@@ -21,6 +22,10 @@ document.addEventListener("DOMContentLoaded", function () {
   for (index = 0; index < audioPlayers.length; index += 1) {
     bindAudioListenTracking(audioPlayers[index]);
     enhanceAudioPlayer(audioPlayers[index]);
+  }
+
+  if (playPage) {
+    initPlayPage(playPage);
   }
 });
 
@@ -49,6 +54,8 @@ function enhanceAudioPlayer(player) {
   var durationTime;
   var muteButton;
   var volume;
+  var visualizerCanvas;
+  var visualizer;
 
   if (player.getAttribute("data-enhanced") === "true") {
     return;
@@ -78,6 +85,14 @@ function enhanceAudioPlayer(player) {
   ].join("");
 
   player.insertAdjacentElement("afterend", shell);
+
+  if (player.getAttribute("data-visualizer") === "true") {
+    visualizerCanvas = document.createElement("canvas");
+    visualizerCanvas.className = "audio-visualizer";
+    visualizerCanvas.setAttribute("aria-hidden", "true");
+    shell.appendChild(visualizerCanvas);
+    visualizer = createAudioVisualizer(player, visualizerCanvas);
+  }
 
   playButton = shell.querySelector(".audio-control-play");
   progress = shell.querySelector(".audio-progress");
@@ -136,11 +151,19 @@ function enhanceAudioPlayer(player) {
     pauseOtherPlayers(player);
     shell.classList.add("is-playing");
     playButton.setAttribute("aria-label", "Пауза");
+
+    if (visualizer) {
+      visualizer.start();
+    }
   });
 
   player.addEventListener("pause", function () {
     shell.classList.remove("is-playing");
     playButton.setAttribute("aria-label", "Воспроизвести");
+
+    if (visualizer) {
+      visualizer.stop();
+    }
   });
 
   player.addEventListener("loadedmetadata", function () {
@@ -160,6 +183,10 @@ function enhanceAudioPlayer(player) {
   player.addEventListener("ended", function () {
     shell.classList.remove("is-playing");
     playButton.setAttribute("aria-label", "Воспроизвести");
+
+    if (visualizer) {
+      visualizer.stop();
+    }
   });
 
   updateTimeline(player, progress, currentTime, durationTime);
@@ -229,4 +256,221 @@ function sendListenEvent(listenUrl) {
       console.error("Failed to save listen", error);
     }
   }
+}
+
+function initPlayPage(root) {
+  var cards = Array.prototype.slice.call(root.querySelectorAll("[data-play-card]"));
+  var queueButtons = Array.prototype.slice.call(root.querySelectorAll("[data-play-select]"));
+  var prevButtons = Array.prototype.slice.call(root.querySelectorAll("[data-play-prev]"));
+  var nextButtons = Array.prototype.slice.call(root.querySelectorAll("[data-play-next]"));
+  var initialId = root.getAttribute("data-play-initial-id");
+  var currentIndex = Math.max(0, cards.findIndex(function (card) {
+    return card.getAttribute("data-play-card") === initialId;
+  }));
+
+  if (!cards.length || !queueButtons.length) {
+    return;
+  }
+
+  function setActiveCard(nextIndex) {
+    var safeIndex = ((nextIndex % cards.length) + cards.length) % cards.length;
+    var activeCard = cards[safeIndex];
+    var activeId = activeCard.getAttribute("data-play-card");
+    var player;
+
+    currentIndex = safeIndex;
+
+    cards.forEach(function (card, index) {
+      var isActive = index === safeIndex;
+      card.hidden = !isActive;
+      card.classList.toggle("is-active", isActive);
+    });
+
+    queueButtons.forEach(function (button) {
+      var isSelected = button.getAttribute("data-play-select") === activeId;
+      button.classList.toggle("is-selected", isSelected);
+      button.setAttribute("aria-selected", isSelected ? "true" : "false");
+    });
+
+    player = activeCard.querySelector("audio.audio-player");
+    if (player) {
+      window.setTimeout(function () {
+        player.play().catch(function () {
+          return null;
+        });
+      }, 120);
+    }
+  }
+
+  queueButtons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      var participantId = button.getAttribute("data-play-select");
+      var nextIndex = cards.findIndex(function (card) {
+        return card.getAttribute("data-play-card") === participantId;
+      });
+
+      if (nextIndex >= 0) {
+        setActiveCard(nextIndex);
+      }
+    });
+  });
+
+  prevButtons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      setActiveCard(currentIndex - 1);
+    });
+  });
+
+  nextButtons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      setActiveCard(currentIndex + 1);
+    });
+  });
+
+  cards.forEach(function (card, index) {
+    var player = card.querySelector("audio.audio-player");
+
+    if (!player) {
+      return;
+    }
+
+    player.addEventListener("ended", function () {
+      if (index === currentIndex) {
+        setActiveCard(currentIndex + 1);
+      }
+    });
+  });
+}
+
+function createAudioVisualizer(player, canvas) {
+  var context = null;
+  var source = null;
+  var analyser = null;
+  var dataArray = null;
+  var animationFrameId = 0;
+  var started = false;
+  var audioContext = null;
+
+  function resizeCanvas() {
+    var width = canvas.clientWidth || 640;
+    var height = canvas.clientHeight || 120;
+
+    canvas.width = width;
+    canvas.height = height;
+  }
+
+  function drawIdle() {
+    var canvasContext = canvas.getContext("2d");
+    var width = canvas.width || canvas.clientWidth || 640;
+    var height = canvas.height || canvas.clientHeight || 120;
+    var step = Math.max(10, Math.floor(width / 36));
+    var x = 0;
+
+    canvasContext.clearRect(0, 0, width, height);
+    canvasContext.fillStyle = "rgba(255, 255, 255, 0.03)";
+    canvasContext.fillRect(0, 0, width, height);
+    canvasContext.fillStyle = "rgba(215, 224, 234, 0.35)";
+
+    while (x < width) {
+      canvasContext.fillRect(x, height * 0.45, Math.max(4, step * 0.45), height * 0.1);
+      x += step;
+    }
+  }
+
+  function ensureGraph() {
+    var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+    if (!AudioContextClass) {
+      return false;
+    }
+
+    if (!audioContext) {
+      audioContext = new AudioContextClass();
+    }
+
+    if (!context) {
+      context = canvas.getContext("2d");
+    }
+
+    if (!analyser) {
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.82;
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+    }
+
+    if (!source) {
+      source = audioContext.createMediaElementSource(player);
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+    }
+
+    return true;
+  }
+
+  function renderFrame() {
+    var width = canvas.width;
+    var height = canvas.height;
+    var barWidth;
+    var index;
+    var value;
+    var barHeight;
+    var x;
+
+    animationFrameId = window.requestAnimationFrame(renderFrame);
+    analyser.getByteFrequencyData(dataArray);
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = "rgba(255, 255, 255, 0.03)";
+    context.fillRect(0, 0, width, height);
+
+    barWidth = width / dataArray.length;
+    x = 0;
+
+    for (index = 0; index < dataArray.length; index += 1) {
+      value = dataArray[index] / 255;
+      barHeight = Math.max(6, value * height * 0.92);
+      context.fillStyle = "rgba(215, 224, 234, " + (0.3 + value * 0.7) + ")";
+      context.fillRect(x, height - barHeight, Math.max(3, barWidth - 3), barHeight);
+      x += barWidth;
+    }
+  }
+
+  function start() {
+    if (!ensureGraph()) {
+      return;
+    }
+
+    resizeCanvas();
+
+    if (audioContext.state === "suspended") {
+      audioContext.resume().catch(function () {
+        return null;
+      });
+    }
+
+    if (started) {
+      return;
+    }
+
+    started = true;
+    renderFrame();
+  }
+
+  function stop() {
+    started = false;
+    if (animationFrameId) {
+      window.cancelAnimationFrame(animationFrameId);
+      animationFrameId = 0;
+    }
+    drawIdle();
+  }
+
+  resizeCanvas();
+  drawIdle();
+  window.addEventListener("resize", resizeCanvas);
+
+  return {
+    start: start,
+    stop: stop,
+  };
 }
