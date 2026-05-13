@@ -196,7 +196,11 @@
               <a class="ghost-button" href="/polls/<%= poll.slug %>/report">
                 <%= poll.is_active ? "Превью отчета" : "Открыть отчет" %>
               </a>
-              <form method="post" action="/admin/polls/<%= poll.id %>/delete">
+              <form
+                method="post"
+                action="/admin/polls/<%= poll.id %>/delete"
+                onsubmit="return confirm('Удалить этап &quot;<%= poll.title %>&quot;? Это действие нельзя отменить.')"
+              >
                 <button class="ghost-button danger-button" type="submit">Удалить этап</button>
               </form>
             </article>
@@ -451,7 +455,11 @@
                   <td><%= formatDate(user.last_login_at) %></td>
                   <td><%= user.login_count %></td>
                   <td>
-                    <form method="post" action="/admin/users/<%= user.id %>/reset-votes">
+                    <form
+                      method="post"
+                      action="/admin/users/<%= user.id %>/reset-votes"
+                      onsubmit="return confirm('Сбросить все голоса пользователя <%= (user.full_name || user.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
+                    >
                       <button class="ghost-button danger-button" type="submit">Сбросить голоса</button>
                     </form>
                   </td>
@@ -479,7 +487,11 @@
                 </span>
               </summary>
               <div class="vote-user-summary-actions">
-                <form method="post" action="/admin/users/<%= userVotes.user_id %>/reset-votes">
+                <form
+                  method="post"
+                  action="/admin/users/<%= userVotes.user_id %>/reset-votes"
+                  onsubmit="return confirm('Сбросить все голоса пользователя <%= (userVotes.full_name || userVotes.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
+                >
                   <button class="ghost-button danger-button" type="submit">Сбросить голоса пользователя</button>
                 </form>
               </div>
