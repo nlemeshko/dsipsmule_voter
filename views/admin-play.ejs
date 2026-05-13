@@ -144,10 +144,11 @@
                           <audio
                             class="audio-player"
                             controls
-                            preload="metadata"
+                            preload="none"
                             controlsList="nodownload noplaybackrate"
                             src="<%= participant.playback_url %>"
                             data-visualizer="true"
+                            data-autoplay-switch="<%= participant.audio_source_type === 'external_url' ? 'false' : 'true' %>"
                           ></audio>
                         </div>
                       <% } else { %>

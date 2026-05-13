@@ -407,7 +407,7 @@ function initPlayPage(root) {
     });
 
     player = activeCard.querySelector("audio.audio-player");
-    if (player) {
+    if (player && player.getAttribute("data-autoplay-switch") !== "false") {
       attemptPlayerStart(player);
     }
   }
@@ -460,12 +460,10 @@ function pauseAllPlayers() {
 
 function createAudioVisualizer(player, canvas) {
   var context = null;
-  var source = null;
-  var analyser = null;
-  var dataArray = null;
   var animationFrameId = 0;
   var started = false;
-  var audioContext = null;
+  var phase = Math.random() * Math.PI * 2;
+  var drift = 0;
 
   function resizeCanvas() {
     var width = canvas.clientWidth || 640;
@@ -493,85 +491,54 @@ function createAudioVisualizer(player, canvas) {
     }
   }
 
-  function ensureGraph() {
-    var AudioContextClass = window.AudioContext || window.webkitAudioContext;
-
-    if (!AudioContextClass) {
-      return false;
-    }
-
-    if (!audioContext) {
-      audioContext = new AudioContextClass();
-    }
-
-    if (!context) {
-      context = canvas.getContext("2d");
-    }
-
-    if (!analyser) {
-      analyser = audioContext.createAnalyser();
-      analyser.fftSize = 128;
-      analyser.smoothingTimeConstant = 0.82;
-      dataArray = new Uint8Array(analyser.frequencyBinCount);
-    }
-
-    if (!source) {
-      try {
-        source = audioContext.createMediaElementSource(player);
-        source.connect(analyser);
-        analyser.connect(audioContext.destination);
-      } catch (error) {
-        canvas.classList.add("audio-visualizer-disabled");
-        drawIdle();
-        if (window.console && console.warn) {
-          console.warn("Audio visualizer disabled for this source", error);
-        }
-        return false;
-      }
-    }
-
-    return true;
-  }
-
   function renderFrame() {
     var width = canvas.width;
     var height = canvas.height;
-    var barWidth;
-    var index;
-    var value;
-    var barHeight;
+    var lineCount = 3;
+    var pointCount = 42;
+    var lineIndex;
+    var pointIndex;
     var x;
+    var y;
+    var progress = Number.isFinite(player.currentTime) ? player.currentTime : 0;
+    var duration = Number.isFinite(player.duration) ? player.duration : 0;
+    var energy = player.paused ? 0.18 : 0.48;
+    var amplitudeBase = height * (0.08 + energy * 0.24);
+    var hueBase = (progress * 18 + drift * 30) % 360;
 
+    phase += player.paused ? 0.006 : 0.032;
+    drift += player.paused ? 0.002 : 0.01;
     animationFrameId = window.requestAnimationFrame(renderFrame);
-    analyser.getByteFrequencyData(dataArray);
     context.clearRect(0, 0, width, height);
-    context.fillStyle = "rgba(255, 255, 255, 0.03)";
+    context.fillStyle = "rgba(255, 255, 255, 0.035)";
     context.fillRect(0, 0, width, height);
 
-    barWidth = width / dataArray.length;
-    x = 0;
+    for (lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+      context.beginPath();
+      context.lineWidth = 2 + lineIndex * 1.4;
+      context.strokeStyle = "hsla(" + ((hueBase + lineIndex * 55) % 360) + ", 88%, 76%, " + (0.2 + lineIndex * 0.12) + ")";
 
-    for (index = 0; index < dataArray.length; index += 1) {
-      value = dataArray[index] / 255;
-      barHeight = Math.max(6, value * height * 0.92);
-      context.fillStyle = "rgba(215, 224, 234, " + (0.3 + value * 0.7) + ")";
-      context.fillRect(x, height - barHeight, Math.max(3, barWidth - 3), barHeight);
-      x += barWidth;
+      for (pointIndex = 0; pointIndex <= pointCount; pointIndex += 1) {
+        x = (width / pointCount) * pointIndex;
+        y = height * (0.5 + (lineIndex - 1) * 0.08);
+        y += Math.sin(phase + pointIndex * 0.34 + lineIndex * 0.9) * amplitudeBase;
+        y += Math.cos(phase * 0.7 + pointIndex * 0.18 + lineIndex * 1.3) * amplitudeBase * 0.45;
+        y += duration > 0 ? Math.sin((progress / duration) * Math.PI * 2 + pointIndex * 0.12) * 8 : 0;
+
+        if (pointIndex === 0) {
+          context.moveTo(x, y);
+        } else {
+          context.lineTo(x, y);
+        }
+      }
+
+      context.stroke();
     }
   }
 
   function start() {
-    if (!ensureGraph()) {
-      return;
-    }
-
     resizeCanvas();
-
-    if (audioContext.state === "suspended") {
-      audioContext.resume().catch(function () {
-        return null;
-      });
-    }
+    canvas.classList.remove("audio-visualizer-disabled");
 
     if (started) {
       return;

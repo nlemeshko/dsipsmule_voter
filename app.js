@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const { Readable } = require("stream");
 const express = require("express");
 const session = require("express-session");
 const Database = require("better-sqlite3");
@@ -327,6 +328,63 @@ app.get("/media/external-image", async (req, res) => {
     res.status(502).send("Failed to proxy external image.");
   }
 });
+app.use("/media/external-audio", async (req, res) => {
+  const src = String(req.query.src || "").trim();
+
+  if (!/^https?:\/\//i.test(src)) {
+    return res.status(400).send("Invalid audio source.");
+  }
+
+  try {
+    const requestHeaders = {};
+
+    ["range", "if-range", "accept", "accept-encoding"].forEach((headerName) => {
+      const headerValue = req.get(headerName);
+      if (headerValue) {
+        requestHeaders[headerName] = headerValue;
+      }
+    });
+
+    const response = await fetch(src, {
+      method: req.method === "HEAD" ? "HEAD" : "GET",
+      headers: requestHeaders,
+      redirect: "follow",
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).send("Failed to load external audio.");
+    }
+
+    [
+      "content-type",
+      "content-length",
+      "content-range",
+      "accept-ranges",
+      "cache-control",
+      "etag",
+      "last-modified",
+    ].forEach((headerName) => {
+      const headerValue = response.headers.get(headerName);
+      if (headerValue) {
+        res.setHeader(headerName, headerValue);
+      }
+    });
+
+    if (!res.getHeader("Cache-Control")) {
+      res.setHeader("Cache-Control", "public, max-age=3600");
+    }
+
+    res.status(response.status);
+
+    if (req.method === "HEAD" || !response.body) {
+      return res.end();
+    }
+
+    Readable.fromWeb(response.body).pipe(res);
+  } catch (error) {
+    res.status(502).send("Failed to proxy external audio.");
+  }
+});
 app.use("/media", express.static(MEDIA_DIR));
 
 const upload = multer({
@@ -568,6 +626,11 @@ function clearPollImageFiles(pollId) {
 function buildParticipantAudioUrl(audioFilePath) {
   const fileName = path.basename(String(audioFilePath || "").trim());
   return fileName ? `/media/${encodeURIComponent(fileName)}` : "";
+}
+
+function buildExternalAudioUrl(audioSourceUrl) {
+  const normalized = String(audioSourceUrl || "").trim();
+  return normalized ? `/media/external-audio?src=${encodeURIComponent(normalized)}` : "";
 }
 
 function buildParticipantImageUrl(imagePath) {
