@@ -94,6 +94,7 @@ function enhanceAudioPlayer(player) {
     visualizerCanvas.setAttribute("aria-hidden", "true");
     shell.appendChild(visualizerCanvas);
     visualizer = createAudioVisualizer(player, visualizerCanvas);
+    visualizer.start();
   }
 
   playButton = shell.querySelector(".audio-control-play");
@@ -180,9 +181,8 @@ function enhanceAudioPlayer(player) {
     shell.classList.add("is-playing");
     playButton.setAttribute("aria-label", "Пауза");
     syncPagePlaybackState();
-
     if (visualizer) {
-      visualizer.start();
+      visualizer.setPlaying(true);
     }
   });
 
@@ -190,9 +190,8 @@ function enhanceAudioPlayer(player) {
     shell.classList.remove("is-playing");
     playButton.setAttribute("aria-label", "Воспроизвести");
     syncPagePlaybackState();
-
     if (visualizer) {
-      visualizer.stop();
+      visualizer.setPlaying(false);
     }
   });
 
@@ -233,9 +232,8 @@ function enhanceAudioPlayer(player) {
     playButton.setAttribute("aria-label", "Воспроизвести");
     isScrubbing = false;
     syncPagePlaybackState();
-
     if (visualizer) {
-      visualizer.stop();
+      visualizer.setPlaying(false);
     }
   });
 
@@ -407,9 +405,6 @@ function initPlayPage(root) {
     });
 
     player = activeCard.querySelector("audio.audio-player");
-    if (player && player.getAttribute("data-autoplay-switch") !== "false") {
-      attemptPlayerStart(player);
-    }
   }
 
   queueButtons.forEach(function (button) {
@@ -462,6 +457,7 @@ function createAudioVisualizer(player, canvas) {
   var context = null;
   var animationFrameId = 0;
   var started = false;
+  var isPlaying = false;
   var phase = Math.random() * Math.PI * 2;
   var drift = 0;
 
@@ -473,57 +469,37 @@ function createAudioVisualizer(player, canvas) {
     canvas.height = height;
   }
 
-  function drawIdle() {
-    var canvasContext = canvas.getContext("2d");
-    var width = canvas.width || canvas.clientWidth || 640;
-    var height = canvas.height || canvas.clientHeight || 120;
-    var step = Math.max(10, Math.floor(width / 36));
-    var x = 0;
-
-    canvasContext.clearRect(0, 0, width, height);
-    canvasContext.fillStyle = "rgba(255, 255, 255, 0.03)";
-    canvasContext.fillRect(0, 0, width, height);
-    canvasContext.fillStyle = "rgba(215, 224, 234, 0.35)";
-
-    while (x < width) {
-      canvasContext.fillRect(x, height * 0.45, Math.max(4, step * 0.45), height * 0.1);
-      x += step;
-    }
-  }
-
   function renderFrame() {
     var width = canvas.width;
     var height = canvas.height;
-    var lineCount = 3;
-    var pointCount = 42;
+    var lineCount = 4;
+    var pointCount = 54;
     var lineIndex;
     var pointIndex;
     var x;
     var y;
-    var progress = Number.isFinite(player.currentTime) ? player.currentTime : 0;
-    var duration = Number.isFinite(player.duration) ? player.duration : 0;
-    var energy = player.paused ? 0.18 : 0.48;
-    var amplitudeBase = height * (0.08 + energy * 0.24);
-    var hueBase = (progress * 18 + drift * 30) % 360;
+    var energy = isPlaying ? 0.5 : 0.22;
+    var amplitudeBase = height * (0.06 + energy * 0.18);
+    var hueBase = (drift * 55) % 360;
 
-    phase += player.paused ? 0.006 : 0.032;
-    drift += player.paused ? 0.002 : 0.01;
+    phase += isPlaying ? 0.03 : 0.012;
+    drift += isPlaying ? 0.014 : 0.004;
     animationFrameId = window.requestAnimationFrame(renderFrame);
     context.clearRect(0, 0, width, height);
-    context.fillStyle = "rgba(255, 255, 255, 0.035)";
+    context.fillStyle = "rgba(255, 255, 255, 0.03)";
     context.fillRect(0, 0, width, height);
 
     for (lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
       context.beginPath();
-      context.lineWidth = 2 + lineIndex * 1.4;
-      context.strokeStyle = "hsla(" + ((hueBase + lineIndex * 55) % 360) + ", 88%, 76%, " + (0.2 + lineIndex * 0.12) + ")";
+      context.lineWidth = 1.6 + lineIndex * 1.2;
+      context.strokeStyle = "hsla(" + ((hueBase + lineIndex * 42) % 360) + ", 92%, 78%, " + (0.18 + lineIndex * 0.11) + ")";
 
       for (pointIndex = 0; pointIndex <= pointCount; pointIndex += 1) {
         x = (width / pointCount) * pointIndex;
-        y = height * (0.5 + (lineIndex - 1) * 0.08);
-        y += Math.sin(phase + pointIndex * 0.34 + lineIndex * 0.9) * amplitudeBase;
-        y += Math.cos(phase * 0.7 + pointIndex * 0.18 + lineIndex * 1.3) * amplitudeBase * 0.45;
-        y += duration > 0 ? Math.sin((progress / duration) * Math.PI * 2 + pointIndex * 0.12) * 8 : 0;
+        y = height * (0.5 + (lineIndex - 1.5) * 0.09);
+        y += Math.sin(phase + pointIndex * 0.26 + lineIndex * 0.8) * amplitudeBase;
+        y += Math.cos(phase * 0.85 + pointIndex * 0.14 + lineIndex * 1.2) * amplitudeBase * 0.52;
+        y += Math.sin(drift + pointIndex * 0.08 + lineIndex * 1.5) * amplitudeBase * 0.24;
 
         if (pointIndex === 0) {
           context.moveTo(x, y);
@@ -538,7 +514,6 @@ function createAudioVisualizer(player, canvas) {
 
   function start() {
     resizeCanvas();
-    canvas.classList.remove("audio-visualizer-disabled");
 
     if (started) {
       return;
@@ -554,15 +529,18 @@ function createAudioVisualizer(player, canvas) {
       window.cancelAnimationFrame(animationFrameId);
       animationFrameId = 0;
     }
-    drawIdle();
+  }
+
+  function setPlaying(nextPlaying) {
+    isPlaying = Boolean(nextPlaying);
   }
 
   resizeCanvas();
-  drawIdle();
   window.addEventListener("resize", resizeCanvas);
 
   return {
     start: start,
     stop: stop,
+    setPlaying: setPlaying,
   };
 }
