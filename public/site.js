@@ -63,6 +63,7 @@ function enhanceAudioPlayer(player) {
   }
 
   player.setAttribute("data-enhanced", "true");
+  player.preload = "metadata";
   player.controls = false;
   player.classList.add("audio-player-native");
 
@@ -108,7 +109,7 @@ function enhanceAudioPlayer(player) {
 
   playButton.addEventListener("click", function () {
     if (player.paused) {
-      player.play();
+      attemptPlayerStart(player);
       return;
     }
 
@@ -197,6 +198,22 @@ function enhanceAudioPlayer(player) {
 
   player.addEventListener("loadedmetadata", function () {
     updateTimeline(player, progress, currentTime, durationTime);
+  });
+
+  player.addEventListener("canplay", function () {
+    updateTimeline(player, progress, currentTime, durationTime);
+  });
+
+  player.addEventListener("emptied", function () {
+    updateTimeline(player, progress, currentTime, durationTime);
+  });
+
+  player.addEventListener("error", function () {
+    shell.classList.add("has-audio-error");
+  });
+
+  player.addEventListener("loadstart", function () {
+    shell.classList.remove("has-audio-error");
   });
 
   player.addEventListener("timeupdate", function () {
@@ -319,6 +336,30 @@ function sendListenEvent(listenUrl) {
   }
 }
 
+function attemptPlayerStart(player) {
+  var playPromise;
+
+  try {
+    if (player.readyState === 0) {
+      player.load();
+    }
+
+    playPromise = player.play();
+
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(function (error) {
+        if (window.console && console.warn) {
+          console.warn("Audio playback start failed", error);
+        }
+      });
+    }
+  } catch (error) {
+    if (window.console && console.warn) {
+      console.warn("Audio playback exception", error);
+    }
+  }
+}
+
 function syncPagePlaybackState() {
   var hasPlayingAudio = Array.prototype.some.call(
     document.querySelectorAll("audio.audio-player"),
@@ -350,6 +391,7 @@ function initPlayPage(root) {
     var activeId = activeCard.getAttribute("data-play-card");
     var player;
 
+    pauseAllPlayers();
     currentIndex = safeIndex;
 
     cards.forEach(function (card, index) {
@@ -366,11 +408,7 @@ function initPlayPage(root) {
 
     player = activeCard.querySelector("audio.audio-player");
     if (player) {
-      window.setTimeout(function () {
-        player.play().catch(function () {
-          return null;
-        });
-      }, 120);
+      attemptPlayerStart(player);
     }
   }
 
@@ -411,6 +449,12 @@ function initPlayPage(root) {
         setActiveCard(currentIndex + 1);
       }
     });
+  });
+}
+
+function pauseAllPlayers() {
+  Array.prototype.forEach.call(document.querySelectorAll("audio.audio-player"), function (player) {
+    player.pause();
   });
 }
 
@@ -472,9 +516,18 @@ function createAudioVisualizer(player, canvas) {
     }
 
     if (!source) {
-      source = audioContext.createMediaElementSource(player);
-      source.connect(analyser);
-      analyser.connect(audioContext.destination);
+      try {
+        source = audioContext.createMediaElementSource(player);
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+      } catch (error) {
+        canvas.classList.add("audio-visualizer-disabled");
+        drawIdle();
+        if (window.console && console.warn) {
+          console.warn("Audio visualizer disabled for this source", error);
+        }
+        return false;
+      }
     }
 
     return true;
