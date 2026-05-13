@@ -12,6 +12,13 @@
   --line-strong: rgba(215, 224, 234, 0.28);
   --success: #dbe5ef;
   --shadow: 0 28px 80px rgba(0, 0, 0, 0.46);
+  --rainbow-hue: 210;
+}
+
+@property --rainbow-hue {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 210;
 }
 
 * {
@@ -27,6 +34,7 @@ body {
     radial-gradient(circle at top, rgba(111, 135, 158, 0.18), transparent 26%),
     radial-gradient(circle at 20% 20%, rgba(215, 224, 234, 0.08), transparent 20%),
     linear-gradient(180deg, #040a11 0%, #0c1620 34%, #131d27 100%);
+  transition: background 1.4s ease, box-shadow 1.4s ease;
 }
 
 body.preloading {
@@ -48,6 +56,7 @@ body::before {
       transparent 50px
     );
   opacity: 0.3;
+  transition: opacity 1.2s ease, filter 1.2s ease;
 }
 
 body::after {
@@ -64,6 +73,52 @@ body::after {
   filter: blur(26px);
   opacity: 0.45;
   animation: emberFloat 16s ease-in-out infinite;
+  transition: opacity 1.2s ease, filter 1.2s ease, background 1.2s ease;
+}
+
+body.audio-reactive {
+  background:
+    radial-gradient(
+      circle at top,
+      hsla(calc(var(--rainbow-hue) * 1deg), 88%, 62%, 0.22),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 18% 22%,
+      hsla(calc((var(--rainbow-hue) + 110) * 1deg), 84%, 60%, 0.18),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 82% 18%,
+      hsla(calc((var(--rainbow-hue) + 220) * 1deg), 84%, 62%, 0.18),
+      transparent 24%
+    ),
+    linear-gradient(
+      180deg,
+      hsl(calc((var(--rainbow-hue) + 255) * 1deg), 42%, 8%) 0%,
+      hsl(calc((var(--rainbow-hue) + 300) * 1deg), 46%, 11%) 45%,
+      hsl(calc((var(--rainbow-hue) + 350) * 1deg), 48%, 13%) 100%
+    );
+  animation: rainbowShift 84s linear infinite;
+}
+
+body.audio-reactive::before {
+  opacity: 0.42;
+  filter: hue-rotate(calc(var(--rainbow-hue) * 1deg));
+  animation: rainbowOverlayDrift 42s linear infinite;
+}
+
+body.audio-reactive::after {
+  opacity: 0.72;
+  background: radial-gradient(
+    circle,
+    hsla(calc((var(--rainbow-hue) + 150) * 1deg), 82%, 65%, 0.24),
+    transparent 68%
+  );
+  filter: blur(30px) hue-rotate(calc((var(--rainbow-hue) + 60) * 1deg));
+  animation:
+    emberFloat 16s ease-in-out infinite,
+    rainbowOverlayDrift 56s linear infinite reverse;
 }
 
 a {
@@ -700,18 +755,34 @@ textarea:focus-visible,
 .audio-range {
   --range-fill: 0%;
   width: 100%;
-  height: 7px;
+  height: 10px;
   border-radius: 999px;
   outline: none;
   appearance: none;
   background:
     linear-gradient(90deg, #8fa8c1 0 var(--range-fill), rgba(255, 255, 255, 0.12) var(--range-fill) 100%);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.audio-progress {
+  min-height: 24px;
+}
+
+.audio-range:hover,
+.audio-range:focus-visible {
+  transform: scaleY(1.08);
+}
+
+.audio-progress:hover,
+.audio-progress:focus-visible {
+  box-shadow: 0 0 0 6px rgba(143, 168, 193, 0.08);
 }
 
 .audio-range::-webkit-slider-thumb {
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 2px solid rgba(9, 17, 26, 0.9);
   background: #f5fbff;
@@ -720,8 +791,8 @@ textarea:focus-visible,
 }
 
 .audio-range::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 2px solid rgba(9, 17, 26, 0.9);
   background: #f5fbff;
@@ -730,7 +801,7 @@ textarea:focus-visible,
 }
 
 .audio-range::-moz-range-track {
-  height: 7px;
+  height: 10px;
   border-radius: 999px;
   background: transparent;
 }
@@ -1833,6 +1904,30 @@ td {
   50% {
     transform: scale(1.03);
     opacity: 1;
+  }
+}
+
+@keyframes rainbowShift {
+  0% {
+    --rainbow-hue: 0;
+  }
+
+  100% {
+    --rainbow-hue: 360;
+  }
+}
+
+@keyframes rainbowOverlayDrift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(1.5%, -1.5%, 0) scale(1.04);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 

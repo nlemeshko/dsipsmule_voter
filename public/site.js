@@ -56,6 +56,7 @@ function enhanceAudioPlayer(player) {
   var volume;
   var visualizerCanvas;
   var visualizer;
+  var isScrubbing = false;
 
   if (player.getAttribute("data-enhanced") === "true") {
     return;
@@ -115,14 +116,40 @@ function enhanceAudioPlayer(player) {
   });
 
   progress.addEventListener("input", function () {
-    var duration = player.duration || 0;
-    var nextTime = duration * (Number(progress.value) / 100);
-
-    if (Number.isFinite(nextTime)) {
-      player.currentTime = nextTime;
-    }
-
+    isScrubbing = true;
+    updateScrubPreview(player, progress, currentTime, durationTime);
     syncRangeFill(progress);
+  });
+
+  progress.addEventListener("change", function () {
+    commitScrub(player, progress, currentTime, durationTime, function () {
+      isScrubbing = false;
+    });
+  });
+
+  progress.addEventListener("pointerdown", function () {
+    isScrubbing = true;
+  });
+
+  progress.addEventListener("pointerup", function () {
+    commitScrub(player, progress, currentTime, durationTime, function () {
+      isScrubbing = false;
+    });
+  });
+
+  progress.addEventListener("keyup", function (event) {
+    if (
+      event.key === "ArrowLeft" ||
+      event.key === "ArrowRight" ||
+      event.key === "Home" ||
+      event.key === "End" ||
+      event.key === "PageUp" ||
+      event.key === "PageDown"
+    ) {
+      commitScrub(player, progress, currentTime, durationTime, function () {
+        isScrubbing = false;
+      });
+    }
   });
 
   volume.addEventListener("input", function () {
@@ -151,6 +178,7 @@ function enhanceAudioPlayer(player) {
     pauseOtherPlayers(player);
     shell.classList.add("is-playing");
     playButton.setAttribute("aria-label", "Пауза");
+    syncPagePlaybackState();
 
     if (visualizer) {
       visualizer.start();
@@ -160,6 +188,7 @@ function enhanceAudioPlayer(player) {
   player.addEventListener("pause", function () {
     shell.classList.remove("is-playing");
     playButton.setAttribute("aria-label", "Воспроизвести");
+    syncPagePlaybackState();
 
     if (visualizer) {
       visualizer.stop();
@@ -171,7 +200,9 @@ function enhanceAudioPlayer(player) {
   });
 
   player.addEventListener("timeupdate", function () {
-    updateTimeline(player, progress, currentTime, durationTime);
+    if (!isScrubbing) {
+      updateTimeline(player, progress, currentTime, durationTime);
+    }
   });
 
   player.addEventListener("volumechange", function () {
@@ -183,6 +214,8 @@ function enhanceAudioPlayer(player) {
   player.addEventListener("ended", function () {
     shell.classList.remove("is-playing");
     playButton.setAttribute("aria-label", "Воспроизвести");
+    isScrubbing = false;
+    syncPagePlaybackState();
 
     if (visualizer) {
       visualizer.stop();
@@ -202,6 +235,32 @@ function updateTimeline(player, progress, currentTime, durationTime) {
   currentTime.textContent = formatAudioTime(current);
   durationTime.textContent = formatAudioTime(duration);
   syncRangeFill(progress);
+}
+
+function updateScrubPreview(player, progress, currentTime, durationTime) {
+  var duration = Number.isFinite(player.duration) ? player.duration : 0;
+  var previewTime = duration > 0 ? duration * (Number(progress.value) / 100) : 0;
+
+  currentTime.textContent = formatAudioTime(previewTime);
+  durationTime.textContent = formatAudioTime(duration);
+}
+
+function commitScrub(player, progress, currentTime, durationTime, onComplete) {
+  var duration = player.duration || 0;
+  var nextTime = duration * (Number(progress.value) / 100);
+
+  if (Number.isFinite(nextTime)) {
+    player.currentTime = nextTime;
+  }
+
+  updateTimeline(player, progress, currentTime, durationTime);
+  syncRangeFill(progress);
+  if (typeof onComplete === "function") {
+    onComplete();
+  }
+  window.setTimeout(function () {
+    updateTimeline(player, progress, currentTime, durationTime);
+  }, 30);
 }
 
 function updateMuteState(player, muteButton) {
@@ -224,6 +283,8 @@ function pauseOtherPlayers(activePlayer) {
       players[index].pause();
     }
   }
+
+  syncPagePlaybackState();
 }
 
 function formatAudioTime(seconds) {
@@ -256,6 +317,17 @@ function sendListenEvent(listenUrl) {
       console.error("Failed to save listen", error);
     }
   }
+}
+
+function syncPagePlaybackState() {
+  var hasPlayingAudio = Array.prototype.some.call(
+    document.querySelectorAll("audio.audio-player"),
+    function (player) {
+      return !player.paused && !player.ended;
+    },
+  );
+
+  document.body.classList.toggle("audio-reactive", hasPlayingAudio);
 }
 
 function initPlayPage(root) {
