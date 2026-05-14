@@ -16,7 +16,6 @@
     <main class="shell play-shell">
       <section class="dashboard-topbar">
         <div>
-          <span class="eyebrow">Admin only</span>
           <h1>Play</h1>
         </div>
         <div class="dashboard-topbar-actions">
@@ -125,7 +124,7 @@
                         <% } %>
 
                         <div>
-                          <span class="eyebrow">Участница</span>
+                          <span class="eyebrow">Участник</span>
                           <h2><%= participant.name %></h2>
                           <p class="play-song-title"><%= participant.description || "Без названия песни" %></p>
                         </div>
@@ -151,7 +150,7 @@
                           ></audio>
                         </div>
                       <% } else { %>
-                        <div class="notice">Для этой участницы аудио пока не добавлено.</div>
+                        <div class="notice">Для этого участника аудио пока не добавлено.</div>
                       <% } %>
 
                       <div class="play-actions">
@@ -175,7 +174,7 @@
                       <span class="eyebrow">Материалы</span>
                       <div class="play-meta-list">
                         <div>
-                          <strong>Имя участницы</strong>
+                          <strong>Имя участника</strong>
                           <span><%= participant.name %></span>
                         </div>
                         <div>
@@ -188,7 +187,7 @@
                         </div>
                         <div>
                           <strong>Обложка песни</strong>
-                          <span><%= participant.has_song_image ? "Добавлена" : "Используется фото участницы" %></span>
+                          <span><%= participant.has_song_image ? "Добавлена" : "Используется фото участника" %></span>
                         </div>
                         <div>
                           <strong>Аудио</strong>
