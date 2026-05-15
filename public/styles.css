@@ -183,6 +183,8 @@ textarea {
   color: rgba(237, 242, 248, 0.86);
   font-size: clamp(1.35rem, 2.1vw, 2rem);
   letter-spacing: 0.12em;
+  text-align: center;
+  overflow-wrap: anywhere;
   transition: color 0.2s ease;
 }
 
@@ -304,6 +306,12 @@ textarea {
   isolation: isolate;
 }
 
+.hero-copy {
+  display: grid;
+  gap: 16px;
+  max-width: 880px;
+}
+
 .hero::before,
 .panel::before {
   content: "";
@@ -351,7 +359,7 @@ textarea {
 .mini-card p {
   color: var(--muted);
   line-height: 1.7;
-  font-size: 1.3rem;
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
 }
 
 .eyebrow {
@@ -938,6 +946,7 @@ textarea:focus-visible,
   border: 1px solid rgba(215, 224, 234, 0.12);
   background: rgba(215, 224, 234, 0.07);
   color: var(--success);
+  line-height: 1.5;
   backdrop-filter: blur(8px);
 }
 
@@ -1041,6 +1050,8 @@ textarea {
   overflow: hidden;
   position: relative;
   transition: border-color 0.22s ease, box-shadow 0.22s ease;
+  content-visibility: auto;
+  contain-intrinsic-size: 280px;
 }
 
 .poll-group-summary {
@@ -1538,6 +1549,8 @@ td {
   position: relative;
   overflow: hidden;
   transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+  content-visibility: auto;
+  contain-intrinsic-size: 420px;
 }
 
 .mini-card-cover {
@@ -1710,6 +1723,8 @@ td {
     radial-gradient(circle at top, rgba(111, 135, 158, 0.08), transparent 42%),
     linear-gradient(180deg, rgba(20, 30, 41, 0.94), rgba(11, 17, 24, 0.96));
   overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: 320px;
 }
 
 .betting-basket-head {
@@ -1768,6 +1783,10 @@ td {
   padding: 14px 16px;
   text-align: left;
   vertical-align: middle;
+}
+
+.betting-table td form {
+  width: 100%;
 }
 
 .betting-table thead th {
@@ -2202,6 +2221,8 @@ td {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
   position: relative;
+  content-visibility: auto;
+  contain-intrinsic-size: 86px;
 }
 
 .report-chart-swatch {
@@ -2366,6 +2387,15 @@ td {
     justify-self: center;
   }
 
+  .site-brand-copy {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .site-brand-nav {
+    gap: 12px 20px;
+  }
+
   .contestant-media {
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
@@ -2457,25 +2487,82 @@ td {
 
 @media (max-width: 640px) {
   .shell {
-    width: min(100% - 20px, 1240px);
+    width: min(1240px, calc(100% - 20px));
     padding-top: 20px;
     padding-bottom: 38px;
   }
 
+  .site-brand {
+    gap: 12px;
+  }
+
+  .site-brand-nav {
+    width: 100%;
+    gap: 10px 14px;
+  }
+
   .site-brand-nav a {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.08em;
   }
 
   .site-brand-domain {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
   }
 
   .site-brand-copy strong {
-    font-size: 2.6rem;
+    font-size: 2.3rem;
   }
 
   .site-brand-copy span:last-child {
-    font-size: 1.3rem;
+    font-size: 1.15rem;
+  }
+
+  .hero,
+  .panel {
+    padding: 18px;
+    border-radius: 24px;
+  }
+
+  .hero-copy {
+    gap: 12px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(2.35rem, 13vw, 3.3rem);
+    line-height: 0.94;
+  }
+
+  .hero-copy p,
+  .contestant-copy p,
+  .panel p,
+  .mini-card p {
+    font-size: 1.12rem;
+    line-height: 1.55;
+  }
+
+  .widget-wrap,
+  .user-chip {
+    width: 100%;
+  }
+
+  .widget-wrap {
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mini-card {
+    padding: 18px;
+  }
+
+  .mini-card-cover {
+    width: calc(100% + 36px);
+    margin: -18px -18px 4px;
+    aspect-ratio: 4 / 3;
   }
 
   .poll-group-meta {
@@ -2612,7 +2699,8 @@ td {
   }
 
   .betting-panel-body {
-    padding: 18px;
+    padding: 16px;
+    gap: 16px;
   }
 
   .betting-art-image {
@@ -2624,9 +2712,52 @@ td {
     grid-template-columns: 1fr;
   }
 
-  .betting-table th:nth-child(3),
-  .betting-table td:nth-child(3) {
-    min-width: 132px;
+  .betting-basket-head {
+    padding: 16px;
+  }
+
+  .betting-basket-head h3 {
+    font-size: 1.55rem;
+  }
+
+  .betting-table,
+  .betting-table tbody,
+  .betting-table tr,
+  .betting-table td {
+    display: block;
+    width: 100% !important;
+  }
+
+  .betting-table thead {
+    display: none;
+  }
+
+  .betting-table tr {
+    padding: 14px 16px;
+  }
+
+  .betting-table td {
+    padding: 8px 0;
+    border-top: 0 !important;
+  }
+
+  .betting-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .betting-table td:last-child {
+    padding-bottom: 0;
+  }
+
+  .betting-action,
+  .betting-action-static {
+    max-width: none;
   }
 
   .betting-result-card {
@@ -2640,6 +2771,15 @@ td {
     min-width: 0;
     justify-items: start;
     text-align: left;
+  }
+
+  .betting-percent-cell {
+    justify-items: start;
+  }
+
+  .thanks-panel {
+    padding-top: 32px;
+    padding-bottom: 32px;
   }
 }
 
@@ -2920,7 +3060,7 @@ td {
 
 @media (max-width: 640px) {
   .play-shell {
-    width: min(100% - 20px, 1380px);
+    width: min(1380px, calc(100% - 20px));
   }
 
   .play-song-cover,
@@ -2942,5 +3082,16 @@ td {
   .play-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

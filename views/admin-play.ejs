@@ -109,7 +109,7 @@
                   <div class="play-hero">
                     <div class="play-hero-media">
                       <% if (participant.song_image_url) { %>
-                        <img class="play-song-cover" src="<%= participant.song_image_url %>" alt="Обложка песни <%= participant.description || participant.name %>" />
+                        <img class="play-song-cover" src="<%= participant.song_image_url %>" alt="Обложка песни <%= participant.description || participant.name %>" loading="lazy" decoding="async" />
                       <% } else { %>
                         <div class="play-song-cover play-song-cover-fallback"><span><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span></div>
                       <% } %>
@@ -118,7 +118,7 @@
                     <div class="play-hero-copy">
                       <div class="play-identity">
                         <% if (participant.image_url) { %>
-                          <img class="play-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" />
+                          <img class="play-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
                         <% } else { %>
                           <div class="play-avatar play-avatar-fallback"><span><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span></div>
                         <% } %>
@@ -204,6 +204,6 @@
       <% } %>
     </main>
 
-    <script src="/site.js"></script>
+    <script src="/site.js" defer></script>
   </body>
 </html>

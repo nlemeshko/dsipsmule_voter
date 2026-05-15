@@ -24,6 +24,8 @@
           class="site-brand-logo"
           src="https://dsipsmule.one/wp-content/uploads/2025/09/cropped-image-1.png"
           alt="dsipsmule.one"
+          decoding="async"
+          fetchpriority="high"
         />
         <div class="site-brand-copy">
           <span class="site-brand-domain">dsipsmule.one</span>
@@ -64,7 +66,7 @@
                 <div class="report-participant-heading">
                   <span class="report-place-badge<%= currentPlace <= 3 ? ` report-place-${currentPlace}` : '' %>">#<%= currentPlace %></span>
                   <% if (participant.image_url) { %>
-                    <img class="report-participant-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" />
+                    <img class="report-participant-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
                   <% } else { %>
                     <span class="report-participant-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
                   <% } %>
@@ -87,7 +89,7 @@
                 </div>
                 <div class="report-summary-side">
                   <% if (participant.witcher_choice) { %>
-                    <img class="report-witcher-badge" src="/witcher-choice.png" alt="Выбор Ведьмака" />
+                    <img class="report-witcher-badge" src="/witcher-choice.png" alt="Выбор Ведьмака" loading="lazy" decoding="async" />
                   <% } %>
                 </div>
               </summary>
@@ -128,7 +130,7 @@
                                 <td data-label="Пользователь">
                                   <div class="report-user">
                                     <% if (vote.photo_url) { %>
-                                      <img class="report-user-avatar" src="<%= vote.photo_url %>" alt="<%= vote.full_name || vote.telegram_id %>" />
+                                      <img class="report-user-avatar" src="<%= vote.photo_url %>" alt="<%= vote.full_name || vote.telegram_id %>" loading="lazy" decoding="async" />
                                     <% } else { %>
                                       <span class="report-user-avatar report-user-fallback"><%= (vote.full_name || vote.telegram_id || "?").trim().charAt(0).toUpperCase() %></span>
                                     <% } %>
@@ -228,6 +230,6 @@
         <span>© 2026 Witcher by <a href="https://mdsn.work" target="_blank" rel="noreferrer">MDSN</a> | All Rights Reserved | Powered by <a href="https://t.me/kelahselai" target="_blank" rel="noreferrer">Nicky</a></span>
       </footer>
     </main>
-    <script src="/report-chart.js"></script>
+    <script src="/report-chart.js" defer></script>
   </body>
 </html>

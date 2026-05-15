@@ -167,7 +167,7 @@
           <% polls.forEach((poll) => { %>
             <article class="mini-card">
               <% if (poll.image_url) { %>
-                <img class="mini-card-cover" src="<%= poll.image_url %>" alt="<%= poll.title %>" />
+                <img class="mini-card-cover" src="<%= poll.image_url %>" alt="<%= poll.title %>" loading="lazy" decoding="async" />
               <% } %>
               <div>
                 <strong><%= poll.title %></strong>
@@ -260,7 +260,7 @@
                           <td class="participant-name-cell">
                             <div class="participant-identity">
                               <% if (participant.image_url) { %>
-                                <img class="participant-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" />
+                                <img class="participant-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
                               <% } else { %>
                                 <span class="participant-avatar participant-avatar-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
                               <% } %>
@@ -275,7 +275,7 @@
                               </div>
                             </div>
                             <% if (participant.song_image_url) { %>
-                              <img class="participant-song-cover" src="<%= participant.song_image_url %>" alt="Обложка песни <%= participant.description || participant.name %>" />
+                              <img class="participant-song-cover" src="<%= participant.song_image_url %>" alt="Обложка песни <%= participant.description || participant.name %>" loading="lazy" decoding="async" />
                             <% } %>
                             <% if (participant.witcher_choice) { %>
                               <span class="admin-witcher-choice">Выбор Ведьмака</span>
