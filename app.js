@@ -1097,27 +1097,42 @@ function buildBettingStageData(currentUserId, registrations) {
       0,
     );
     const selectedParticipantId = userBetByBasket.get(basket.code) || null;
+    const participantsWithStats = basket.participants
+      .slice()
+      .sort((left, right) => left.name.localeCompare(right.name, "ru"))
+      .map((participant) => {
+        const betCount = betCountByKey.get(`${basket.code}:${participant.id}`) || 0;
+        const percent = totalBets > 0 ? (betCount / totalBets) * 100 : 0;
+
+        return {
+          ...participant,
+          betCount,
+          percent,
+          percentLabel: formatPercent(percent),
+          isSelected: selectedParticipantId === participant.id,
+        };
+      });
+    const orderedParticipants = selectedParticipantId
+      ? participantsWithStats.slice().sort((left, right) => {
+          if (right.percent !== left.percent) {
+            return right.percent - left.percent;
+          }
+          if (right.betCount !== left.betCount) {
+            return right.betCount - left.betCount;
+          }
+          if (left.isSelected !== right.isSelected) {
+            return left.isSelected ? -1 : 1;
+          }
+          return left.name.localeCompare(right.name, "ru");
+        })
+      : participantsWithStats;
 
     return {
       ...basket,
       totalBets,
       selectedParticipantId,
       hasUserBet: Boolean(selectedParticipantId),
-      participants: basket.participants
-        .slice()
-        .sort((left, right) => left.name.localeCompare(right.name, "ru"))
-        .map((participant) => {
-          const betCount = betCountByKey.get(`${basket.code}:${participant.id}`) || 0;
-          const percent = totalBets > 0 ? (betCount / totalBets) * 100 : 0;
-
-          return {
-            ...participant,
-            betCount,
-            percent,
-            percentLabel: formatPercent(percent),
-            isSelected: selectedParticipantId === participant.id,
-          };
-        }),
+      participants: orderedParticipants,
     };
   });
 
