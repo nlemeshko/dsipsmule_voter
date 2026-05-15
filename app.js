@@ -176,6 +176,11 @@ const voteColumns = db
   .all()
   .map((column) => column.name);
 
+const stageBetColumns = db
+  .prepare("PRAGMA table_info(stage_bets)")
+  .all()
+  .map((column) => column.name);
+
 if (!pollColumns.includes("is_visible")) {
   db.exec("ALTER TABLE polls ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1");
 }
@@ -239,6 +244,14 @@ if (!userColumns.includes("final_winner_participant_id")) {
 
 if (!voteColumns.includes("poll_id")) {
   db.exec("ALTER TABLE votes ADD COLUMN poll_id INTEGER");
+}
+
+if (!stageBetColumns.includes("participant_name")) {
+  db.exec("ALTER TABLE stage_bets ADD COLUMN participant_name TEXT");
+}
+
+if (!stageBetColumns.includes("participant_avatar_url")) {
+  db.exec("ALTER TABLE stage_bets ADD COLUMN participant_avatar_url TEXT");
 }
 
 function slugify(value) {
@@ -918,8 +931,15 @@ function formatPercent(value) {
   return `${normalized.toFixed(1).replace(".0", "")}%`;
 }
 
+function getBettableRegistrationId(registration) {
+  const source = String(registration?.key || buildRegistrationKey(registration) || "").trim();
+  const digest = crypto.createHash("sha1").update(source).digest("hex").slice(0, 12);
+  const numeric = parseInt(digest, 16);
+
+  return Number.isFinite(numeric) ? (numeric % 2147483646) + 1 : 0;
+}
+
 function buildBettingStageData(pollId, currentUserId, registrations) {
-  const participants = getActiveParticipants(pollId);
   const normalizedRegistrations = Array.isArray(registrations) ? registrations : [];
   const basketMap = new Map(
     DEFAULT_BETTING_BASKETS.map((basket) => [
@@ -933,8 +953,7 @@ function buildBettingStageData(pollId, currentUserId, registrations) {
     ]),
   );
 
-  participants.forEach((participant) => {
-    const registration = findRegistrationForParticipant(participant, normalizedRegistrations);
+  normalizedRegistrations.forEach((registration) => {
     const fallbackBasket = getDefaultBettingBasketByCode(registration?.category_code) || null;
     const basketCode = String(registration?.category_code || fallbackBasket?.code || "").trim();
 
@@ -945,10 +964,10 @@ function buildBettingStageData(pollId, currentUserId, registrations) {
     const basket = basketMap.get(basketCode);
     basket.fullName = String(registration?.category_name || basket.fullName || "").trim() || basket.fullName;
     basket.participants.push({
-      id: participant.id,
-      name: participant.name,
-      description: participant.description,
-      image_url: participant.image_url,
+      id: getBettableRegistrationId(registration),
+      name: String(registration.participants || "").trim(),
+      description: registration.telegram_username ? `@${registration.telegram_username}` : "",
+      image_url: buildParticipantImageUrl(registration.avatar_url),
       basket_code: basketCode,
       basket_name: basket.fullName,
     });
@@ -1674,6 +1693,42 @@ function adminStats() {
     `)
     .all();
 
+  const recentBetRows = db
+    .prepare(`
+      SELECT
+        sb.id,
+        sb.created_at,
+        sb.updated_at,
+        sb.basket_code,
+        sb.basket_name,
+        sb.participant_id,
+        sb.participant_name,
+        sb.participant_avatar_url,
+        poll.title AS poll_title,
+        tu.id AS user_id,
+        tu.telegram_id,
+        tu.full_name,
+        tu.username
+      FROM stage_bets sb
+      JOIN polls poll ON poll.id = sb.poll_id
+      JOIN telegram_users tu ON tu.id = sb.user_id
+      ORDER BY sb.updated_at DESC, sb.created_at DESC
+      LIMIT 100
+    `)
+    .all();
+
+  const participantNameById = new Map(
+    db
+      .prepare("SELECT id, name FROM participants")
+      .all()
+      .map((participant) => [participant.id, participant.name]),
+  );
+
+  const recentBets = recentBetRows.map((bet) => ({
+    ...bet,
+    participant_name: String(bet.participant_name || "").trim() || participantNameById.get(bet.participant_id) || "—",
+  }));
+
   const participants = db
     .prepare(`
       SELECT p.id, p.name, p.description, p.image_url, p.song_image_url, p.lyrics_text, p.embed_html, p.audio_file_path, p.audio_source_url, p.audio_source_type, p.witcher_choice, p.is_active, p.created_at, p.updated_at, p.poll_id, poll.title AS poll_title, poll.slug AS poll_slug
@@ -1703,7 +1758,7 @@ function adminStats() {
     };
   });
 
-  return { totals, leaderboard, recentVotes, recentUsers, participants, polls, pollsWithParticipants };
+  return { totals, leaderboard, recentVotes, recentUsers, recentBets, participants, polls, pollsWithParticipants };
 }
 
 function getAdminPlayData(selectedPollId) {
@@ -2254,12 +2309,16 @@ app.post("/bets", ensureUser, async (req, res) => {
       basket_code,
       basket_name,
       participant_id,
+      participant_name,
+      participant_avatar_url,
       created_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, poll_id, basket_code) DO UPDATE SET
       basket_name = excluded.basket_name,
       participant_id = excluded.participant_id,
+      participant_name = excluded.participant_name,
+      participant_avatar_url = excluded.participant_avatar_url,
       updated_at = excluded.updated_at
   `).run(
     pollId,
@@ -2267,6 +2326,8 @@ app.post("/bets", ensureUser, async (req, res) => {
     basket.code,
     basket.fullName,
     participantId,
+    participant.name,
+    participant.image_url,
     timestamp,
     timestamp,
   );

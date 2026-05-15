@@ -1594,10 +1594,14 @@ td {
 }
 
 .betting-toggle {
-  width: min(100%, 320px);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   list-style: none;
   border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .betting-toggle::-webkit-details-marker {
@@ -1605,8 +1609,10 @@ td {
 }
 
 .betting-panel[open] .betting-toggle {
-  margin-top: 16px;
+  margin-top: 0;
   margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .betting-panel-body {
@@ -1692,6 +1698,7 @@ td {
 .betting-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .betting-table th,
@@ -1709,6 +1716,21 @@ td {
   border-bottom: 1px solid rgba(215, 224, 234, 0.12);
 }
 
+.betting-table th:first-child,
+.betting-table td:first-child {
+  width: 42%;
+}
+
+.betting-table th:nth-child(2),
+.betting-table td:nth-child(2) {
+  width: 24%;
+}
+
+.betting-table th:nth-child(3),
+.betting-table td:nth-child(3) {
+  width: 34%;
+}
+
 .betting-table tbody tr + tr td {
   border-top: 1px solid rgba(215, 224, 234, 0.08);
 }
@@ -1722,6 +1744,7 @@ td {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
 
 .betting-participant img {
@@ -1735,18 +1758,24 @@ td {
 .betting-participant strong,
 .betting-percent-cell strong {
   display: block;
-  font-size: 1.35rem;
-  line-height: 1.05;
+  font-size: clamp(1rem, 1.8vw, 1.3rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .betting-participant span {
   display: block;
   margin-top: 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .betting-action {
   min-height: 46px;
+  width: 100%;
   min-width: 132px;
+  max-width: 220px;
   font-size: 1.05rem;
   padding: 0 16px;
 }
