@@ -119,11 +119,6 @@
                     <div class="notice">Аудиоссылка для этой записи еще не добавлена.</div>
                   <% } %>
                 </div>
-                <% if (participant.description) { %>
-                  <div class="contestant-copy">
-                    <h2><%= participant.description %></h2>
-                  </div>
-                <% } %>
                 <form method="post" action="/vote">
                   <input type="hidden" name="poll_id" value="<%= poll.id %>" />
                   <input type="hidden" name="poll_slug" value="<%= poll.slug %>" />

@@ -109,7 +109,7 @@
 
                   <div class="betting-baskets-grid">
                     <% globalBettingStage.baskets.forEach((basket) => { %>
-                      <details class="betting-basket" <%= basket.hasUserBet ? "open" : "" %>>
+                      <details class="betting-basket">
                         <summary class="betting-basket-head">
                           <span class="betting-basket-kicker">Корзина <%= basket.code %></span>
                           <h3><%= basket.shortName %></h3>
