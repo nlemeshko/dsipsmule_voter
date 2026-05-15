@@ -73,28 +73,35 @@
           <% }) %>
         </section>
 
-        <% if (featuredBettingPoll) { %>
+        <% if (globalBettingStage && globalBettingStage.availableBasketCount > 0) { %>
           <section class="betting-launchpad">
             <details
               class="betting-panel"
-              id="bet-panel-<%= featuredBettingPoll.slug %>"
-              <%= expandedBetSlug === featuredBettingPoll.slug ? "open" : "" %>
+              id="bet-panel-burmalda"
+              <%= expandedBetSlug === "burmalda" ? "open" : "" %>
             >
               <summary class="ghost-button betting-toggle">Бурмалда</summary>
-              <% if (!bettingCatalogAvailable || !featuredBettingPoll.bettingStage) { %>
+              <% if (!bettingCatalogAvailable || !globalBettingStage) { %>
                 <div class="betting-panel-body">
                   <div class="notice">Ставки временно недоступны: не удалось загрузить корзины участников.</div>
                 </div>
               <% } else { %>
                 <div class="betting-panel-body">
+                  <div class="betting-art">
+                    <img
+                      class="betting-art-image"
+                      src="/burmalda.png"
+                      alt="Бурмалда"
+                    />
+                  </div>
                   <div class="betting-panel-copy">
-                    <strong>Букмекерская по этапу <%= featuredBettingPoll.title %></strong>
+                    <strong>Гены Букины - Акапелла</strong>
                     <p>
-                      Выберите по одному победителю в каждой корзине. После вашей ставки появится текущий процент по участникам.
+                      Это общее голосование по всем регистрациям. Выберите по одному победителю в каждой корзине, и после ставки увидите текущие проценты.
                     </p>
                     <% if (currentUser) { %>
                       <span class="betting-progress">
-                        Корзин закрыто: <%= featuredBettingPoll.bettingStage.completedBasketCount %> из <%= featuredBettingPoll.bettingStage.availableBasketCount %>
+                        Корзин закрыто: <%= globalBettingStage.completedBasketCount %> из <%= globalBettingStage.availableBasketCount %>
                       </span>
                     <% } else { %>
                       <span class="betting-progress">Для ставки войдите через Telegram.</span>
@@ -102,7 +109,7 @@
                   </div>
 
                   <div class="betting-baskets-grid">
-                    <% featuredBettingPoll.bettingStage.baskets.forEach((basket) => { %>
+                    <% globalBettingStage.baskets.forEach((basket) => { %>
                       <section class="betting-basket">
                         <header class="betting-basket-head">
                           <span class="betting-basket-kicker">Корзина <%= basket.code %></span>
@@ -144,8 +151,6 @@
                                     <td>
                                       <% if (currentUser) { %>
                                         <form method="post" action="/bets">
-                                          <input type="hidden" name="poll_id" value="<%= featuredBettingPoll.id %>" />
-                                          <input type="hidden" name="poll_slug" value="<%= featuredBettingPoll.slug %>" />
                                           <input type="hidden" name="basket_code" value="<%= basket.code %>" />
                                           <input type="hidden" name="participant_id" value="<%= participant.id %>" />
                                           <button class="<%= participant.isSelected ? 'primary-button' : 'ghost-button' %> betting-action" type="submit">

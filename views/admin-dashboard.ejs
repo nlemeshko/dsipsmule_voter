@@ -450,6 +450,7 @@
                 <th>Последний вход</th>
                 <th>Входов</th>
                 <th>Сброс голосов</th>
+                <th>Сброс ставок</th>
               </tr>
             </thead>
             <tbody>
@@ -476,6 +477,15 @@
                       <button class="ghost-button danger-button" type="submit">Сбросить голоса</button>
                     </form>
                   </td>
+                  <td>
+                    <form
+                      method="post"
+                      action="/admin/users/<%= user.id %>/reset-bets"
+                      onsubmit="return confirm('Сбросить все ставки пользователя <%= (user.full_name || user.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
+                    >
+                      <button class="ghost-button danger-button" type="submit">Сбросить ставки</button>
+                    </form>
+                  </td>
                 </tr>
               <% }) %>
             </tbody>
@@ -497,19 +507,29 @@
                   <th>Корзина</th>
                   <th>Участник</th>
                   <th>Пользователь</th>
+                  <th>Действие</th>
                 </tr>
               </thead>
               <tbody>
                 <% recentBets.forEach((bet) => { %>
                   <tr>
                     <td><%= formatDate(bet.updated_at || bet.created_at) %></td>
-                    <td><%= bet.poll_title %></td>
+                    <td><%= bet.poll_title || "Бурмалда" %></td>
                     <td><%= bet.basket_name || `Корзина ${bet.basket_code}` %></td>
                     <td><%= bet.participant_name || "—" %></td>
                     <td>
                       <%= bet.full_name || "—" %>
                       <%= bet.username ? `(@${bet.username})` : "" %>
                       · <%= bet.telegram_id %>
+                    </td>
+                    <td>
+                      <form
+                        method="post"
+                        action="/admin/users/<%= bet.user_id %>/reset-bets"
+                        onsubmit="return confirm('Сбросить все ставки пользователя <%= (bet.full_name || bet.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
+                      >
+                        <button class="ghost-button danger-button" type="submit">Сбросить ставки</button>
+                      </form>
                     </td>
                   </tr>
                 <% }) %>

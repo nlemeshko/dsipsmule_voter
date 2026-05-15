@@ -1621,9 +1621,43 @@ td {
   padding: 22px;
 }
 
+.betting-art {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.betting-art::before {
+  content: "";
+  position: absolute;
+  inset: auto 12% 8% 12%;
+  height: 52%;
+  border-radius: 28px;
+  background: radial-gradient(circle, rgba(218, 152, 62, 0.24), transparent 72%);
+  filter: blur(22px);
+  pointer-events: none;
+}
+
+.betting-art-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(100%, 880px);
+  max-height: 520px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 28px;
+  border: 1px solid rgba(215, 224, 234, 0.16);
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
 .betting-panel-copy {
   display: grid;
   gap: 8px;
+  justify-items: center;
+  text-align: center;
 }
 
 .betting-panel-copy strong {
@@ -1661,7 +1695,7 @@ td {
 
 .betting-baskets-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 18px;
 }
 
@@ -2456,6 +2490,11 @@ td {
 
   .betting-panel-body {
     padding: 18px;
+  }
+
+  .betting-art-image {
+    max-height: none;
+    aspect-ratio: 4 / 5;
   }
 
   .betting-baskets-grid {

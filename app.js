@@ -163,18 +163,26 @@ db.exec(`
 
 function ensureStageBetsSchema() {
   const stageBetForeignKeys = db.prepare("PRAGMA foreign_key_list(stage_bets)").all();
-  const stageBetColumnsBefore = db
-    .prepare("PRAGMA table_info(stage_bets)")
-    .all()
-    .map((column) => column.name);
+  const stageBetTableInfo = db.prepare("PRAGMA table_info(stage_bets)").all();
+  const stageBetColumnsBefore = stageBetTableInfo.map((column) => column.name);
+  const pollIdColumn = stageBetTableInfo.find((column) => column.name === "poll_id") || null;
   const hasParticipantForeignKey = stageBetForeignKeys.some(
     (foreignKey) => foreignKey.table === "participants",
   );
+  const stageBetIndexes = db.prepare("PRAGMA index_list(stage_bets)").all();
+  const uniqueIndexIncludesPoll = stageBetIndexes
+    .filter((index) => Number(index.unique) === 1)
+    .some((index) => {
+      const indexColumns = db.prepare(`PRAGMA index_info(${JSON.stringify(index.name)})`).all();
+      const columnNames = indexColumns.map((column) => column.name);
+      return columnNames.includes("poll_id") && columnNames.includes("user_id") && columnNames.includes("basket_code");
+    });
   const missingBetColumns =
     !stageBetColumnsBefore.includes("participant_name") ||
     !stageBetColumnsBefore.includes("participant_avatar_url");
+  const pollIdIsRequired = Boolean(pollIdColumn && Number(pollIdColumn.notnull) === 1);
 
-  if (!hasParticipantForeignKey && !missingBetColumns) {
+  if (!hasParticipantForeignKey && !missingBetColumns && !pollIdIsRequired && !uniqueIndexIncludesPoll) {
     return;
   }
 
@@ -183,7 +191,7 @@ function ensureStageBetsSchema() {
     db.exec(`
       CREATE TABLE IF NOT EXISTS stage_bets_next (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        poll_id INTEGER NOT NULL,
+        poll_id INTEGER,
         user_id INTEGER NOT NULL,
         basket_code TEXT NOT NULL,
         basket_name TEXT,
@@ -192,7 +200,7 @@ function ensureStageBetsSchema() {
         participant_avatar_url TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        UNIQUE(user_id, poll_id, basket_code),
+        UNIQUE(user_id, basket_code),
         FOREIGN KEY (poll_id) REFERENCES polls(id),
         FOREIGN KEY (user_id) REFERENCES telegram_users(id)
       );
@@ -206,7 +214,7 @@ function ensureStageBetsSchema() {
       : "NULL AS participant_avatar_url";
 
     db.exec(`
-      INSERT INTO stage_bets_next (
+      INSERT OR REPLACE INTO stage_bets_next (
         id,
         poll_id,
         user_id,
@@ -220,7 +228,7 @@ function ensureStageBetsSchema() {
       )
       SELECT
         id,
-        poll_id,
+        NULL AS poll_id,
         user_id,
         basket_code,
         basket_name,
@@ -1018,7 +1026,7 @@ function getBettableRegistrationId(registration) {
   return Number.isFinite(numeric) ? (numeric % 2147483646) + 1 : 0;
 }
 
-function buildBettingStageData(pollId, currentUserId, registrations) {
+function buildBettingStageData(currentUserId, registrations) {
   const normalizedRegistrations = Array.isArray(registrations) ? registrations : [];
   const basketMap = new Map(
     DEFAULT_BETTING_BASKETS.map((basket) => [
@@ -1056,18 +1064,18 @@ function buildBettingStageData(pollId, currentUserId, registrations) {
     .prepare(`
       SELECT basket_code, participant_id, COUNT(*) AS total
       FROM stage_bets
-      WHERE poll_id = ?
+      WHERE poll_id IS NULL
       GROUP BY basket_code, participant_id
     `)
-    .all(pollId);
+    .all();
   const userBetRows = currentUserId
     ? db
         .prepare(`
           SELECT basket_code, participant_id
           FROM stage_bets
-          WHERE poll_id = ? AND user_id = ?
+          WHERE poll_id IS NULL AND user_id = ?
         `)
-        .all(pollId, currentUserId)
+        .all(currentUserId)
     : [];
 
   const betCountByKey = new Map(
@@ -2095,22 +2103,18 @@ app.get("/", async (req, res) => {
     bettingCatalogAvailable = false;
   }
 
-  const pollsWithBetting = polls.map((poll) => ({
-    ...poll,
-    bettingStage: poll.is_active ? buildBettingStageData(poll.id, req.session.user?.id, registrations) : null,
-  }));
-  const featuredBettingPoll = pollsWithBetting.find(
-    (poll) => poll.is_active && poll.bettingStage && poll.bettingStage.availableBasketCount > 0,
-  ) || null;
+  const globalBettingStage = bettingCatalogAvailable
+    ? buildBettingStageData(req.session.user?.id, registrations)
+    : null;
 
   res.render("polls-index", {
-    polls: pollsWithBetting,
+    polls,
     telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
     telegramAuthUrl: buildTelegramAuthUrl(postLoginReturnTo),
     bettingCatalogAvailable,
     expandedBetSlug: String(req.query.bet || "").trim(),
-    featuredBettingPoll,
+    globalBettingStage,
   });
 });
 
@@ -2345,19 +2349,9 @@ app.post("/polls/:slug/participants/:id/listen", ensureUser, (req, res) => {
 });
 
 app.post("/bets", ensureUser, async (req, res) => {
-  const pollId = Number(req.body.poll_id);
-  const pollSlug = String(req.body.poll_slug || "").trim();
   const basketCode = String(req.body.basket_code || "").trim();
   const participantId = Number(req.body.participant_id);
   const userId = req.session.user.id;
-  const poll = db.prepare("SELECT id, slug, is_active FROM polls WHERE id = ?").get(pollId);
-
-  if (!poll || !poll.is_active) {
-    return res.status(400).render("error", {
-      title: "Ошибка ставки",
-      message: "Этап для ставки не найден или уже закрыт.",
-    });
-  }
 
   let registrations;
   try {
@@ -2369,7 +2363,7 @@ app.post("/bets", ensureUser, async (req, res) => {
     });
   }
 
-  const bettingStage = buildBettingStageData(pollId, userId, registrations);
+  const bettingStage = buildBettingStageData(userId, registrations);
   const basket = bettingStage.baskets.find((entry) => entry.code === basketCode);
   const participant = basket?.participants.find((entry) => entry.id === participantId);
 
@@ -2393,14 +2387,15 @@ app.post("/bets", ensureUser, async (req, res) => {
       created_at,
       updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id, poll_id, basket_code) DO UPDATE SET
+    ON CONFLICT(user_id, basket_code) DO UPDATE SET
+      poll_id = excluded.poll_id,
       basket_name = excluded.basket_name,
       participant_id = excluded.participant_id,
       participant_name = excluded.participant_name,
       participant_avatar_url = excluded.participant_avatar_url,
       updated_at = excluded.updated_at
   `).run(
-    pollId,
+    null,
     userId,
     basket.code,
     basket.fullName,
@@ -2411,7 +2406,7 @@ app.post("/bets", ensureUser, async (req, res) => {
     timestamp,
   );
 
-  res.redirect(`/?bet=${encodeURIComponent(pollSlug || poll.slug)}#bet-panel-${encodeURIComponent(pollSlug || poll.slug)}`);
+  res.redirect("/?bet=burmalda#bet-panel-burmalda");
 });
 
 app.post("/vote", ensureUser, (req, res) => {
@@ -3012,6 +3007,18 @@ app.post("/admin/users/:id/reset-votes", ensureAdmin, (req, res) => {
   res.redirect("/admin");
 });
 
+app.post("/admin/users/:id/reset-bets", ensureAdmin, (req, res) => {
+  const userId = Number(req.params.id);
+  const user = db.prepare("SELECT id FROM telegram_users WHERE id = ?").get(userId);
+
+  if (!user) {
+    return res.redirect("/admin");
+  }
+
+  db.prepare("DELETE FROM stage_bets WHERE user_id = ?").run(userId);
+  res.redirect("/admin");
+});
+
 app.post("/admin/polls/:id/reset-bets", ensureAdmin, (req, res) => {
   const pollId = Number(req.params.id);
   const poll = db.prepare("SELECT id FROM polls WHERE id = ?").get(pollId);
@@ -3020,7 +3027,7 @@ app.post("/admin/polls/:id/reset-bets", ensureAdmin, (req, res) => {
     return res.redirect("/admin");
   }
 
-  db.prepare("DELETE FROM stage_bets WHERE poll_id = ?").run(pollId);
+  db.prepare("DELETE FROM stage_bets").run();
   res.redirect("/admin");
 });
 
