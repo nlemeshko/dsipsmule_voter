@@ -95,6 +95,9 @@
                     />
                   </div>
                   <div class="betting-panel-copy">
+                    <div class="notice betting-warning">
+                      Проголосовать в каждой корзине можно только один раз. Выбирай с умом: изменить ставку может только админ через сброс.
+                    </div>
                     <p>
                       Это общее голосование по всем регистрациям. Выберите по одному победителю в каждой корзине, и после ставки увидите текущие проценты.
                     </p>
@@ -121,6 +124,37 @@
 
                         <% if (basket.participants.length === 0) { %>
                           <div class="betting-empty">В этой корзине пока нет участников для этого этапа.</div>
+                        <% } else if (basket.hasUserBet) { %>
+                          <div class="betting-results">
+                            <% basket.participants.forEach((participant, index) => { %>
+                              <article class="betting-result-card <%= participant.isSelected ? 'is-picked' : '' %>">
+                                <div class="betting-result-rank">#<%= index + 1 %></div>
+                                <div class="betting-result-main">
+                                  <div class="betting-participant">
+                                    <% if (participant.image_url) { %>
+                                      <img src="<%= participant.image_url %>" alt="<%= participant.name %>" />
+                                    <% } %>
+                                    <div>
+                                      <strong><%= participant.name %></strong>
+                                      <% if (participant.description) { %>
+                                        <span><%= participant.description %></span>
+                                      <% } %>
+                                    </div>
+                                  </div>
+                                  <div class="betting-bar">
+                                    <div class="betting-bar-fill <%= participant.isSelected ? 'is-picked' : '' %>" style="width: <%= participant.percent %>%;"></div>
+                                  </div>
+                                </div>
+                                <div class="betting-result-stats">
+                                  <strong><%= participant.percentLabel %></strong>
+                                  <span><%= participant.betCount %> ставок</span>
+                                  <% if (participant.isSelected) { %>
+                                    <em>Ваш выбор</em>
+                                  <% } %>
+                                </div>
+                              </article>
+                            <% }) %>
+                          </div>
                         <% } else { %>
                           <div class="betting-table-wrap">
                             <table class="betting-table">
@@ -149,13 +183,19 @@
                                     </td>
                                     <td>
                                       <% if (currentUser) { %>
-                                        <form method="post" action="/bets">
-                                          <input type="hidden" name="basket_code" value="<%= basket.code %>" />
-                                          <input type="hidden" name="participant_id" value="<%= participant.id %>" />
-                                          <button class="<%= participant.isSelected ? 'primary-button' : 'ghost-button' %> betting-action" type="submit">
-                                            <%= participant.isSelected ? "Ваша ставка" : "Поставить" %>
-                                          </button>
-                                        </form>
+                                        <% if (basket.hasUserBet) { %>
+                                          <span class="<%= participant.isSelected ? 'primary-button' : 'ghost-button' %> betting-action betting-action-static">
+                                            <%= participant.isSelected ? "Ваша ставка" : "Ставка закрыта" %>
+                                          </span>
+                                        <% } else { %>
+                                          <form method="post" action="/bets">
+                                            <input type="hidden" name="basket_code" value="<%= basket.code %>" />
+                                            <input type="hidden" name="participant_id" value="<%= participant.id %>" />
+                                            <button class="ghost-button betting-action" type="submit">
+                                              Поставить
+                                            </button>
+                                          </form>
+                                        <% } %>
                                       <% } else { %>
                                         <span class="betting-lock">Нужен вход</span>
                                       <% } %>

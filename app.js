@@ -2389,6 +2389,21 @@ app.post("/bets", ensureUser, async (req, res) => {
     });
   }
 
+  const existingBet = db
+    .prepare(`
+      SELECT participant_id
+      FROM stage_bets
+      WHERE poll_id IS NULL AND user_id = ? AND basket_code = ?
+    `)
+    .get(userId, basket.code);
+
+  if (existingBet) {
+    return res.status(409).render("error", {
+      title: "Ставка уже зафиксирована",
+      message: "В этой корзине можно проголосовать только один раз. Изменить ставку может только админ через сброс.",
+    });
+  }
+
   const timestamp = nowIso();
   db.prepare(`
     INSERT INTO stage_bets (
@@ -2402,13 +2417,6 @@ app.post("/bets", ensureUser, async (req, res) => {
       created_at,
       updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id, basket_code) DO UPDATE SET
-      poll_id = excluded.poll_id,
-      basket_name = excluded.basket_name,
-      participant_id = excluded.participant_id,
-      participant_name = excluded.participant_name,
-      participant_avatar_url = excluded.participant_avatar_url,
-      updated_at = excluded.updated_at
   `).run(
     null,
     userId,

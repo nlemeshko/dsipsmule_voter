@@ -1660,6 +1660,10 @@ td {
   text-align: center;
 }
 
+.betting-warning {
+  max-width: 760px;
+}
+
 .betting-panel-copy strong {
   font-size: 1.9rem;
   letter-spacing: 0.04em;
@@ -1797,6 +1801,86 @@ td {
   background: rgba(111, 135, 158, 0.08);
 }
 
+.betting-results {
+  display: grid;
+}
+
+.betting-result-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+}
+
+.betting-result-card + .betting-result-card {
+  border-top: 1px solid rgba(215, 224, 234, 0.08);
+}
+
+.betting-result-card.is-picked {
+  background: rgba(111, 135, 158, 0.08);
+}
+
+.betting-result-rank {
+  width: 48px;
+  min-width: 48px;
+  color: rgba(237, 242, 248, 0.7);
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+.betting-result-main {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.betting-bar {
+  position: relative;
+  width: 100%;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.betting-bar-fill {
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(113, 136, 161, 0.72), rgba(177, 194, 216, 0.94));
+}
+
+.betting-bar-fill.is-picked {
+  background: linear-gradient(90deg, #91a9c3, #d6e3f2);
+  box-shadow: 0 0 18px rgba(145, 169, 195, 0.28);
+}
+
+.betting-result-stats {
+  min-width: 104px;
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+  text-align: right;
+}
+
+.betting-result-stats strong {
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.betting-result-stats span,
+.betting-result-stats em {
+  color: var(--muted);
+  font-size: 1rem;
+  font-style: normal;
+}
+
+.betting-result-stats em {
+  color: var(--steel);
+}
+
 .betting-participant {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -1836,6 +1920,10 @@ td {
   max-width: 220px;
   font-size: 1.05rem;
   padding: 0 16px;
+}
+
+.betting-action-static {
+  cursor: default;
 }
 
 .betting-percent-cell {
@@ -2539,6 +2627,19 @@ td {
   .betting-table th:nth-child(3),
   .betting-table td:nth-child(3) {
     min-width: 132px;
+  }
+
+  .betting-result-card {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .betting-result-rank,
+  .betting-result-stats {
+    width: 100%;
+    min-width: 0;
+    justify-items: start;
+    text-align: left;
   }
 }
 
