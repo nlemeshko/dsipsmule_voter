@@ -111,6 +111,21 @@ db.exec(`
     FOREIGN KEY (loser_participant_id) REFERENCES participants(id)
   );
 
+  CREATE TABLE IF NOT EXISTS stage_bets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    basket_code TEXT NOT NULL,
+    basket_name TEXT,
+    participant_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(user_id, poll_id, basket_code),
+    FOREIGN KEY (poll_id) REFERENCES polls(id),
+    FOREIGN KEY (user_id) REFERENCES telegram_users(id),
+    FOREIGN KEY (participant_id) REFERENCES participants(id)
+  );
+
   CREATE TABLE IF NOT EXISTS user_poll_progress (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -865,6 +880,148 @@ function enrichParticipantsFromRegistrations(participants, registrations) {
       image_url: buildParticipantImageUrl(registration.avatar_url),
     };
   });
+}
+
+const DEFAULT_BETTING_BASKETS = [
+  {
+    code: "1",
+    shortName: "Вокалисты",
+    fullName: "Корзина имени Гены Букина — Вокалисты",
+  },
+  {
+    code: "2",
+    shortName: "Рокеры",
+    fullName: "Корзина имени Светы Букиной — Рокеры",
+  },
+  {
+    code: "3",
+    shortName: "Реперы",
+    fullName: "Корзина имени Ромы Букина — Реперы",
+  },
+  {
+    code: "4",
+    shortName: "Приколисты",
+    fullName: "Корзина имени Даши Букиной — Приколисты",
+  },
+];
+
+function getDefaultBettingBasketByCode(code) {
+  return DEFAULT_BETTING_BASKETS.find((basket) => basket.code === String(code || "").trim()) || null;
+}
+
+function formatPercent(value) {
+  const normalized = Number(value) || 0;
+  if (Math.abs(normalized - Math.round(normalized)) < 0.05) {
+    return `${Math.round(normalized)}%`;
+  }
+
+  return `${normalized.toFixed(1).replace(".0", "")}%`;
+}
+
+function buildBettingStageData(pollId, currentUserId, registrations) {
+  const participants = getActiveParticipants(pollId);
+  const normalizedRegistrations = Array.isArray(registrations) ? registrations : [];
+  const basketMap = new Map(
+    DEFAULT_BETTING_BASKETS.map((basket) => [
+      basket.code,
+      {
+        code: basket.code,
+        shortName: basket.shortName,
+        fullName: basket.fullName,
+        participants: [],
+      },
+    ]),
+  );
+
+  participants.forEach((participant) => {
+    const registration = findRegistrationForParticipant(participant, normalizedRegistrations);
+    const fallbackBasket = getDefaultBettingBasketByCode(registration?.category_code) || null;
+    const basketCode = String(registration?.category_code || fallbackBasket?.code || "").trim();
+
+    if (!basketMap.has(basketCode)) {
+      return;
+    }
+
+    const basket = basketMap.get(basketCode);
+    basket.fullName = String(registration?.category_name || basket.fullName || "").trim() || basket.fullName;
+    basket.participants.push({
+      id: participant.id,
+      name: participant.name,
+      description: participant.description,
+      image_url: participant.image_url,
+      basket_code: basketCode,
+      basket_name: basket.fullName,
+    });
+  });
+
+  const betRows = db
+    .prepare(`
+      SELECT basket_code, participant_id, COUNT(*) AS total
+      FROM stage_bets
+      WHERE poll_id = ?
+      GROUP BY basket_code, participant_id
+    `)
+    .all(pollId);
+  const userBetRows = currentUserId
+    ? db
+        .prepare(`
+          SELECT basket_code, participant_id
+          FROM stage_bets
+          WHERE poll_id = ? AND user_id = ?
+        `)
+        .all(pollId, currentUserId)
+    : [];
+
+  const betCountByKey = new Map(
+    betRows.map((row) => [`${row.basket_code}:${row.participant_id}`, Number(row.total) || 0]),
+  );
+  const userBetByBasket = new Map(
+    userBetRows.map((row) => [String(row.basket_code || "").trim(), Number(row.participant_id) || 0]),
+  );
+
+  const baskets = DEFAULT_BETTING_BASKETS.map((defaultBasket) => {
+    const basket = basketMap.get(defaultBasket.code) || {
+      code: defaultBasket.code,
+      shortName: defaultBasket.shortName,
+      fullName: defaultBasket.fullName,
+      participants: [],
+    };
+    const totalBets = basket.participants.reduce(
+      (sum, participant) => sum + (betCountByKey.get(`${basket.code}:${participant.id}`) || 0),
+      0,
+    );
+    const selectedParticipantId = userBetByBasket.get(basket.code) || null;
+
+    return {
+      ...basket,
+      totalBets,
+      selectedParticipantId,
+      hasUserBet: Boolean(selectedParticipantId),
+      participants: basket.participants
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name, "ru"))
+        .map((participant) => {
+          const betCount = betCountByKey.get(`${basket.code}:${participant.id}`) || 0;
+          const percent = totalBets > 0 ? (betCount / totalBets) * 100 : 0;
+
+          return {
+            ...participant,
+            betCount,
+            percent,
+            percentLabel: formatPercent(percent),
+            isSelected: selectedParticipantId === participant.id,
+          };
+        }),
+    };
+  });
+
+  return {
+    baskets,
+    availableBasketCount: baskets.filter((basket) => basket.participants.length > 0).length,
+    completedBasketCount: baskets.filter(
+      (basket) => basket.participants.length > 0 && basket.hasUserBet,
+    ).length,
+  };
 }
 
 function savePollImageFile(pollId, file) {
@@ -1782,7 +1939,7 @@ function upsertTelegramUser(profile) {
     .get(telegramId);
 }
 
-app.get("/", (req, res) => {
+app.get("/", async (req, res) => {
   const isAdmin = Boolean(req.session.isAdmin);
   const polls = getPolls().filter((poll) => isAdmin || poll.is_visible);
   const activePolls = polls.filter((poll) => poll.is_active);
@@ -1790,11 +1947,27 @@ app.get("/", (req, res) => {
     activePolls.length === 1 ? `/polls/${activePolls[0].slug}` : "/";
   req.session.returnTo = postLoginReturnTo;
 
+  let registrations = [];
+  let bettingCatalogAvailable = true;
+
+  try {
+    registrations = await loadRegistrationsCatalog();
+  } catch {
+    bettingCatalogAvailable = false;
+  }
+
+  const pollsWithBetting = polls.map((poll) => ({
+    ...poll,
+    bettingStage: poll.is_active ? buildBettingStageData(poll.id, req.session.user?.id, registrations) : null,
+  }));
+
   res.render("polls-index", {
-    polls,
+    polls: pollsWithBetting,
     telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
     telegramAuthUrl: buildTelegramAuthUrl(postLoginReturnTo),
+    bettingCatalogAvailable,
+    expandedBetSlug: String(req.query.bet || "").trim(),
   });
 });
 
@@ -2026,6 +2199,70 @@ app.post("/polls/:slug/participants/:id/listen", ensureUser, (req, res) => {
   );
 
   res.json({ ok: true });
+});
+
+app.post("/bets", ensureUser, async (req, res) => {
+  const pollId = Number(req.body.poll_id);
+  const pollSlug = String(req.body.poll_slug || "").trim();
+  const basketCode = String(req.body.basket_code || "").trim();
+  const participantId = Number(req.body.participant_id);
+  const userId = req.session.user.id;
+  const poll = db.prepare("SELECT id, slug, is_active FROM polls WHERE id = ?").get(pollId);
+
+  if (!poll || !poll.is_active) {
+    return res.status(400).render("error", {
+      title: "Ошибка ставки",
+      message: "Этап для ставки не найден или уже закрыт.",
+    });
+  }
+
+  let registrations;
+  try {
+    registrations = await loadRegistrationsCatalog();
+  } catch (error) {
+    return res.status(503).render("error", {
+      title: "Ставки временно недоступны",
+      message: error.message || "Не удалось загрузить список корзин.",
+    });
+  }
+
+  const bettingStage = buildBettingStageData(pollId, userId, registrations);
+  const basket = bettingStage.baskets.find((entry) => entry.code === basketCode);
+  const participant = basket?.participants.find((entry) => entry.id === participantId);
+
+  if (!basket || !participant) {
+    return res.status(400).render("error", {
+      title: "Ошибка ставки",
+      message: "Выберите участника из нужной корзины.",
+    });
+  }
+
+  const timestamp = nowIso();
+  db.prepare(`
+    INSERT INTO stage_bets (
+      poll_id,
+      user_id,
+      basket_code,
+      basket_name,
+      participant_id,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, poll_id, basket_code) DO UPDATE SET
+      basket_name = excluded.basket_name,
+      participant_id = excluded.participant_id,
+      updated_at = excluded.updated_at
+  `).run(
+    pollId,
+    userId,
+    basket.code,
+    basket.fullName,
+    participantId,
+    timestamp,
+    timestamp,
+  );
+
+  res.redirect(`/?bet=${encodeURIComponent(pollSlug || poll.slug)}#bet-panel-${encodeURIComponent(pollSlug || poll.slug)}`);
 });
 
 app.post("/vote", ensureUser, (req, res) => {
