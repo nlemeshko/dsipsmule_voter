@@ -66,115 +66,120 @@
               </div>
               <% if (poll.is_active) { %>
                 <a class="primary-button" href="/polls/<%= poll.slug %>">Открыть этап</a>
-                <details
-                  class="betting-panel"
-                  id="bet-panel-<%= poll.slug %>"
-                  <%= expandedBetSlug === poll.slug ? "open" : "" %>
-                >
-                  <summary class="ghost-button betting-toggle">Сделать ставку</summary>
-                  <% if (!bettingCatalogAvailable || !poll.bettingStage) { %>
-                    <div class="betting-panel-body">
-                      <div class="notice">Ставки временно недоступны: не удалось загрузить корзины участников.</div>
-                    </div>
-                  <% } else { %>
-                    <div class="betting-panel-body">
-                      <div class="betting-panel-copy">
-                        <strong>Букмекерская по этапу</strong>
-                        <p>
-                          Выберите по одному победителю в каждой корзине. После вашей ставки появится текущий процент по участникам.
-                        </p>
-                        <% if (currentUser) { %>
-                          <span class="betting-progress">
-                            Корзин закрыто: <%= poll.bettingStage.completedBasketCount %> из <%= poll.bettingStage.availableBasketCount %>
-                          </span>
-                        <% } else { %>
-                          <span class="betting-progress">Для ставки войдите через Telegram.</span>
-                        <% } %>
-                      </div>
-
-                      <div class="betting-baskets-grid">
-                        <% poll.bettingStage.baskets.forEach((basket) => { %>
-                          <section class="betting-basket">
-                            <header class="betting-basket-head">
-                              <span class="betting-basket-kicker">Корзина <%= basket.code %></span>
-                              <h3><%= basket.shortName %></h3>
-                              <p><%= basket.fullName %></p>
-                              <% if (basket.totalBets > 0) { %>
-                                <span class="betting-basket-total">Всего ставок: <%= basket.totalBets %></span>
-                              <% } %>
-                            </header>
-
-                            <% if (basket.participants.length === 0) { %>
-                              <div class="betting-empty">В этой корзине пока нет участников для этого этапа.</div>
-                            <% } else { %>
-                              <div class="betting-table-wrap">
-                                <table class="betting-table">
-                                  <thead>
-                                    <tr>
-                                      <th>Участник</th>
-                                      <th>Ставка</th>
-                                      <th>Процент</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    <% basket.participants.forEach((participant) => { %>
-                                      <tr class="<%= participant.isSelected ? 'is-picked' : '' %>">
-                                        <td>
-                                          <div class="betting-participant">
-                                            <% if (participant.image_url) { %>
-                                              <img src="<%= participant.image_url %>" alt="<%= participant.name %>" />
-                                            <% } %>
-                                            <div>
-                                              <strong><%= participant.name %></strong>
-                                              <% if (participant.description) { %>
-                                                <span><%= participant.description %></span>
-                                              <% } %>
-                                            </div>
-                                          </div>
-                                        </td>
-                                        <td>
-                                          <% if (currentUser) { %>
-                                            <form method="post" action="/bets">
-                                              <input type="hidden" name="poll_id" value="<%= poll.id %>" />
-                                              <input type="hidden" name="poll_slug" value="<%= poll.slug %>" />
-                                              <input type="hidden" name="basket_code" value="<%= basket.code %>" />
-                                              <input type="hidden" name="participant_id" value="<%= participant.id %>" />
-                                              <button class="<%= participant.isSelected ? 'primary-button' : 'ghost-button' %> betting-action" type="submit">
-                                                <%= participant.isSelected ? "Ваша ставка" : "Поставить" %>
-                                              </button>
-                                            </form>
-                                          <% } else { %>
-                                            <span class="betting-lock">Нужен вход</span>
-                                          <% } %>
-                                        </td>
-                                        <td>
-                                          <% if (basket.hasUserBet) { %>
-                                            <div class="betting-percent-cell">
-                                              <strong><%= participant.percentLabel %></strong>
-                                              <span><%= participant.betCount %> ставок</span>
-                                            </div>
-                                          <% } else { %>
-                                            <span class="betting-hidden-percent">Появится после вашей ставки</span>
-                                          <% } %>
-                                        </td>
-                                      </tr>
-                                    <% }) %>
-                                  </tbody>
-                                </table>
-                              </div>
-                            <% } %>
-                          </section>
-                        <% }) %>
-                      </div>
-                    </div>
-                  <% } %>
-                </details>
               <% } else { %>
                 <a class="ghost-button" href="/polls/<%= poll.slug %>/report">Открыть отчет</a>
               <% } %>
             </article>
           <% }) %>
         </section>
+
+        <% if (featuredBettingPoll) { %>
+          <section class="betting-launchpad">
+            <details
+              class="betting-panel"
+              id="bet-panel-<%= featuredBettingPoll.slug %>"
+              <%= expandedBetSlug === featuredBettingPoll.slug ? "open" : "" %>
+            >
+              <summary class="ghost-button betting-toggle">Бурмалда</summary>
+              <% if (!bettingCatalogAvailable || !featuredBettingPoll.bettingStage) { %>
+                <div class="betting-panel-body">
+                  <div class="notice">Ставки временно недоступны: не удалось загрузить корзины участников.</div>
+                </div>
+              <% } else { %>
+                <div class="betting-panel-body">
+                  <div class="betting-panel-copy">
+                    <strong>Букмекерская по этапу <%= featuredBettingPoll.title %></strong>
+                    <p>
+                      Выберите по одному победителю в каждой корзине. После вашей ставки появится текущий процент по участникам.
+                    </p>
+                    <% if (currentUser) { %>
+                      <span class="betting-progress">
+                        Корзин закрыто: <%= featuredBettingPoll.bettingStage.completedBasketCount %> из <%= featuredBettingPoll.bettingStage.availableBasketCount %>
+                      </span>
+                    <% } else { %>
+                      <span class="betting-progress">Для ставки войдите через Telegram.</span>
+                    <% } %>
+                  </div>
+
+                  <div class="betting-baskets-grid">
+                    <% featuredBettingPoll.bettingStage.baskets.forEach((basket) => { %>
+                      <section class="betting-basket">
+                        <header class="betting-basket-head">
+                          <span class="betting-basket-kicker">Корзина <%= basket.code %></span>
+                          <h3><%= basket.shortName %></h3>
+                          <p><%= basket.fullName %></p>
+                          <% if (basket.totalBets > 0) { %>
+                            <span class="betting-basket-total">Всего ставок: <%= basket.totalBets %></span>
+                          <% } %>
+                        </header>
+
+                        <% if (basket.participants.length === 0) { %>
+                          <div class="betting-empty">В этой корзине пока нет участников для этого этапа.</div>
+                        <% } else { %>
+                          <div class="betting-table-wrap">
+                            <table class="betting-table">
+                              <thead>
+                                <tr>
+                                  <th>Участник</th>
+                                  <th>Ставка</th>
+                                  <th>Процент</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <% basket.participants.forEach((participant) => { %>
+                                  <tr class="<%= participant.isSelected ? 'is-picked' : '' %>">
+                                    <td>
+                                      <div class="betting-participant">
+                                        <% if (participant.image_url) { %>
+                                          <img src="<%= participant.image_url %>" alt="<%= participant.name %>" />
+                                        <% } %>
+                                        <div>
+                                          <strong><%= participant.name %></strong>
+                                          <% if (participant.description) { %>
+                                            <span><%= participant.description %></span>
+                                          <% } %>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td>
+                                      <% if (currentUser) { %>
+                                        <form method="post" action="/bets">
+                                          <input type="hidden" name="poll_id" value="<%= featuredBettingPoll.id %>" />
+                                          <input type="hidden" name="poll_slug" value="<%= featuredBettingPoll.slug %>" />
+                                          <input type="hidden" name="basket_code" value="<%= basket.code %>" />
+                                          <input type="hidden" name="participant_id" value="<%= participant.id %>" />
+                                          <button class="<%= participant.isSelected ? 'primary-button' : 'ghost-button' %> betting-action" type="submit">
+                                            <%= participant.isSelected ? "Ваша ставка" : "Поставить" %>
+                                          </button>
+                                        </form>
+                                      <% } else { %>
+                                        <span class="betting-lock">Нужен вход</span>
+                                      <% } %>
+                                    </td>
+                                    <td>
+                                      <% if (basket.hasUserBet) { %>
+                                        <div class="betting-percent-cell">
+                                          <strong><%= participant.percentLabel %></strong>
+                                          <span><%= participant.betCount %> ставок</span>
+                                        </div>
+                                      <% } else { %>
+                                        <span class="betting-hidden-percent">Появится после вашей ставки</span>
+                                      <% } %>
+                                    </td>
+                                  </tr>
+                                <% }) %>
+                              </tbody>
+                            </table>
+                          </div>
+                        <% } %>
+                      </section>
+                    <% }) %>
+                  </div>
+                </div>
+              <% } %>
+            </details>
+          </section>
+        <% } %>
       </section>
       <footer class="site-footer">
         <span>© 2026 Witcher by <a href="https://mdsn.work" target="_blank" rel="noreferrer">MDSN</a> | All Rights Reserved | Powered by <a href="https://t.me/kelahselai" target="_blank" rel="noreferrer">Nicky</a></span>

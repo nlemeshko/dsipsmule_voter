@@ -45,6 +45,10 @@
           <strong><%= totals.listens %></strong>
         </article>
         <article class="stat-card">
+          <span>Ставки</span>
+          <strong><%= totals.bets %></strong>
+        </article>
+        <article class="stat-card">
           <span>Активные участники</span>
           <strong><%= totals.participants %></strong>
         </article>
@@ -171,6 +175,7 @@
                 <span><%= baseUrl %>/polls/<%= poll.slug %></span>
                 <span><%= poll.is_visible ? "Видимость: Видно на главной" : "Видимость: Скрыт с главной" %></span>
                 <span>Статус: <%= poll.is_active ? "Открыт" : "Закрыт" %></span>
+                <span>Ставок: <%= poll.betCount || 0 %></span>
               </div>
               <form class="stack-form" method="post" action="/admin/polls/<%= poll.id %>/update" enctype="multipart/form-data">
                 <label>
@@ -192,6 +197,13 @@
                 <button class="ghost-button" type="submit">
                   <%= poll.is_active ? "Закрыть этап" : "Открыть этап" %>
                 </button>
+              </form>
+              <form
+                method="post"
+                action="/admin/polls/<%= poll.id %>/reset-bets"
+                onsubmit="return confirm('Сбросить все ставки для этапа &quot;<%= poll.title %>&quot;? Обычные голоса останутся без изменений.')"
+              >
+                <button class="ghost-button danger-button" type="submit">Сбросить ставки</button>
               </form>
               <a class="ghost-button" href="/polls/<%= poll.slug %>/report">
                 <%= poll.is_active ? "Превью отчета" : "Открыть отчет" %>
@@ -221,6 +233,7 @@
                 <div class="poll-group-meta">
                   <span>Участников: <%= poll.participantCount %></span>
                   <span>Голосов: <%= poll.voteCount %></span>
+                  <span>Ставок: <%= poll.betCount || 0 %></span>
                   <span>Прослушиваний: <%= poll.listenCount %></span>
                   <span>Людей: <%= poll.uniqueVoterCount %></span>
                 </div>

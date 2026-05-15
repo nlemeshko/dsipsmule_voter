@@ -1552,6 +1552,7 @@ function adminStats() {
       `)
       .get().count,
     listens: db.prepare("SELECT COUNT(*) AS count FROM participant_listens").get().count,
+    bets: db.prepare("SELECT COUNT(*) AS count FROM stage_bets").get().count,
     participants: db
       .prepare("SELECT COUNT(*) AS count FROM participants WHERE is_active = 1")
       .get().count,
@@ -1687,11 +1688,15 @@ function adminStats() {
   const pollsWithParticipants = polls.map((poll) => {
     const report = getPollReportData(poll.id);
     const pollParticipants = report?.participants || [];
+    const betCount = db
+      .prepare("SELECT COUNT(*) AS count FROM stage_bets WHERE poll_id = ?")
+      .get(poll.id).count;
 
     return {
       ...poll,
       participantCount: pollParticipants.length,
       voteCount: report?.totals.votes || 0,
+      betCount,
       uniqueVoterCount: report?.totals.voters || 0,
       listenCount: report?.totals.listens || 0,
       participants: pollParticipants,
@@ -1960,6 +1965,9 @@ app.get("/", async (req, res) => {
     ...poll,
     bettingStage: poll.is_active ? buildBettingStageData(poll.id, req.session.user?.id, registrations) : null,
   }));
+  const featuredBettingPoll = pollsWithBetting.find(
+    (poll) => poll.is_active && poll.bettingStage && poll.bettingStage.availableBasketCount > 0,
+  ) || null;
 
   res.render("polls-index", {
     polls: pollsWithBetting,
@@ -1968,6 +1976,7 @@ app.get("/", async (req, res) => {
     telegramAuthUrl: buildTelegramAuthUrl(postLoginReturnTo),
     bettingCatalogAvailable,
     expandedBetSlug: String(req.query.bet || "").trim(),
+    featuredBettingPoll,
   });
 });
 
@@ -2632,6 +2641,7 @@ app.post("/admin/polls/:id/delete", ensureAdmin, (req, res) => {
     });
     clearPollImageFiles(pollId);
     db.prepare("DELETE FROM participant_listens WHERE poll_id = ?").run(pollId);
+    db.prepare("DELETE FROM stage_bets WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM votes WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM user_poll_progress WHERE poll_id = ?").run(pollId);
     db.prepare("DELETE FROM participants WHERE poll_id = ?").run(pollId);
@@ -2830,6 +2840,7 @@ app.post("/admin/participants/:id/delete", ensureAdmin, (req, res) => {
     clearParticipantAudioFiles(id);
     clearParticipantSongImageFiles(id);
     db.prepare("DELETE FROM participant_listens WHERE participant_id = ?").run(id);
+    db.prepare("DELETE FROM stage_bets WHERE participant_id = ?").run(id);
     db.prepare(`
       DELETE FROM votes
       WHERE winner_participant_id = ? OR loser_participant_id = ?
@@ -2858,6 +2869,18 @@ app.post("/admin/users/:id/reset-votes", ensureAdmin, (req, res) => {
   });
 
   resetVotesTx();
+  res.redirect("/admin");
+});
+
+app.post("/admin/polls/:id/reset-bets", ensureAdmin, (req, res) => {
+  const pollId = Number(req.params.id);
+  const poll = db.prepare("SELECT id FROM polls WHERE id = ?").get(pollId);
+
+  if (!poll) {
+    return res.redirect("/admin");
+  }
+
+  db.prepare("DELETE FROM stage_bets WHERE poll_id = ?").run(pollId);
   res.redirect("/admin");
 });
 
