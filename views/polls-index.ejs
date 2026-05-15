@@ -95,7 +95,6 @@
                     />
                   </div>
                   <div class="betting-panel-copy">
-                    <strong>Гены Букины - Акапелла</strong>
                     <p>
                       Это общее голосование по всем регистрациям. Выберите по одному победителю в каждой корзине, и после ставки увидите текущие проценты.
                     </p>
@@ -110,15 +109,15 @@
 
                   <div class="betting-baskets-grid">
                     <% globalBettingStage.baskets.forEach((basket) => { %>
-                      <section class="betting-basket">
-                        <header class="betting-basket-head">
+                      <details class="betting-basket" <%= basket.hasUserBet ? "open" : "" %>>
+                        <summary class="betting-basket-head">
                           <span class="betting-basket-kicker">Корзина <%= basket.code %></span>
                           <h3><%= basket.shortName %></h3>
                           <p><%= basket.fullName %></p>
                           <% if (basket.totalBets > 0) { %>
                             <span class="betting-basket-total">Всего ставок: <%= basket.totalBets %></span>
                           <% } %>
-                        </header>
+                        </summary>
 
                         <% if (basket.participants.length === 0) { %>
                           <div class="betting-empty">В этой корзине пока нет участников для этого этапа.</div>
@@ -177,7 +176,7 @@
                             </table>
                           </div>
                         <% } %>
-                      </section>
+                      </details>
                     <% }) %>
                   </div>
                 </div>

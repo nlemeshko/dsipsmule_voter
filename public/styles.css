@@ -1709,9 +1709,18 @@ td {
 }
 
 .betting-basket-head {
+  list-style: none;
+  cursor: pointer;
   display: grid;
   gap: 8px;
   padding: 18px 18px 14px;
+}
+
+.betting-basket-head::-webkit-details-marker {
+  display: none;
+}
+
+.betting-basket[open] .betting-basket-head {
   border-bottom: 1px solid rgba(215, 224, 234, 0.1);
 }
 
@@ -1723,6 +1732,21 @@ td {
 
 .betting-basket-head p {
   margin: 0;
+}
+
+.betting-basket-head::after {
+  content: "Открыть корзину";
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 2px;
+  color: rgba(237, 242, 248, 0.72);
+  font-size: 0.96rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.betting-basket[open] .betting-basket-head::after {
+  content: "Скрыть корзину";
 }
 
 .betting-table-wrap {

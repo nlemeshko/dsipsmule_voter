@@ -1797,7 +1797,7 @@ function adminStats() {
         tu.full_name,
         tu.username
       FROM stage_bets sb
-      JOIN polls poll ON poll.id = sb.poll_id
+      LEFT JOIN polls poll ON poll.id = sb.poll_id
       JOIN telegram_users tu ON tu.id = sb.user_id
       ORDER BY sb.updated_at DESC, sb.created_at DESC
       LIMIT 100
