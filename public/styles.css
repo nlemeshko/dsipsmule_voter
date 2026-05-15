@@ -1899,6 +1899,11 @@ td {
   width: 100%;
   max-width: 100%;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "play"
+    "timeline"
+    "volume";
+  justify-items: stretch;
   gap: 14px;
   padding: 14px;
 }
@@ -1914,10 +1919,16 @@ td {
 }
 
 .duel-triple .audio-volume-group {
-  width: min(100%, 220px);
-  margin-inline: auto;
+  width: 100%;
+  max-width: 220px;
+  justify-self: center;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
+}
+
+.duel-triple .audio-timeline .audio-time {
+  min-width: 0;
+  font-size: 0.92rem;
 }
 
 .duel-triple .audio-range::-webkit-slider-thumb {
