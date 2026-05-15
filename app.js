@@ -161,6 +161,85 @@ db.exec(`
   );
 `);
 
+function ensureStageBetsSchema() {
+  const stageBetForeignKeys = db.prepare("PRAGMA foreign_key_list(stage_bets)").all();
+  const stageBetColumnsBefore = db
+    .prepare("PRAGMA table_info(stage_bets)")
+    .all()
+    .map((column) => column.name);
+  const hasParticipantForeignKey = stageBetForeignKeys.some(
+    (foreignKey) => foreignKey.table === "participants",
+  );
+  const missingBetColumns =
+    !stageBetColumnsBefore.includes("participant_name") ||
+    !stageBetColumnsBefore.includes("participant_avatar_url");
+
+  if (!hasParticipantForeignKey && !missingBetColumns) {
+    return;
+  }
+
+  db.transaction(() => {
+    db.exec("PRAGMA foreign_keys = OFF");
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS stage_bets_next (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        poll_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        basket_code TEXT NOT NULL,
+        basket_name TEXT,
+        participant_id INTEGER NOT NULL,
+        participant_name TEXT,
+        participant_avatar_url TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(user_id, poll_id, basket_code),
+        FOREIGN KEY (poll_id) REFERENCES polls(id),
+        FOREIGN KEY (user_id) REFERENCES telegram_users(id)
+      );
+    `);
+
+    const selectParticipantNameSql = stageBetColumnsBefore.includes("participant_name")
+      ? "participant_name"
+      : "NULL AS participant_name";
+    const selectParticipantAvatarSql = stageBetColumnsBefore.includes("participant_avatar_url")
+      ? "participant_avatar_url"
+      : "NULL AS participant_avatar_url";
+
+    db.exec(`
+      INSERT INTO stage_bets_next (
+        id,
+        poll_id,
+        user_id,
+        basket_code,
+        basket_name,
+        participant_id,
+        participant_name,
+        participant_avatar_url,
+        created_at,
+        updated_at
+      )
+      SELECT
+        id,
+        poll_id,
+        user_id,
+        basket_code,
+        basket_name,
+        participant_id,
+        ${selectParticipantNameSql},
+        ${selectParticipantAvatarSql},
+        created_at,
+        updated_at
+      FROM stage_bets;
+    `);
+
+    db.exec("DROP TABLE stage_bets");
+    db.exec("ALTER TABLE stage_bets_next RENAME TO stage_bets");
+    db.exec("PRAGMA foreign_keys = ON");
+  })();
+}
+
+ensureStageBetsSchema();
+
 const participantColumns = db
   .prepare("PRAGMA table_info(participants)")
   .all()
