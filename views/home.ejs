@@ -45,6 +45,10 @@
             <div class="notice"><%= telegramStatus %></div>
           <% } %>
 
+          <% if (voteStatus) { %>
+            <div class="notice"><%= voteStatus %></div>
+          <% } %>
+
           <% if (currentUser) { %>
             <div class="user-chip">
               <% if (currentUser.photo_url) { %>
@@ -83,6 +87,7 @@
           <div class="notice">
             Раунд <%= votingProgress.roundNumber %>. Выберите
             <%= votingProgress.stageType === "triple" ? "одного из трех" : "одного из двух" %>.
+            В нечетных корзинах будет ТРИ конкурсанта!
           </div>
           <% if (votingProgress.canUndo) { %>
             <form method="post" action="/vote/back">

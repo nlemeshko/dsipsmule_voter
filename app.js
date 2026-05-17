@@ -2152,12 +2152,17 @@ app.get("/polls/:slug", (req, res) => {
         : req.query.tg_error === "config"
           ? "Telegram не настроен на сервере."
           : null;
+  const voteStatus =
+    req.query.vote_error === "stale_choice"
+      ? "Ваш выбор уже устарел. Мы обновили этап и показали актуальные варианты."
+      : null;
 
   res.render("home", {
     poll,
     votingProgress,
     error: null,
     telegramStatus,
+    voteStatus,
     telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
     telegramAuthUrl: buildTelegramAuthUrl(`/polls/${poll.slug}`),
@@ -2461,10 +2466,7 @@ app.post("/vote", ensureUser, (req, res) => {
 
   const choiceIds = progress.participants.map((participant) => participant.id);
   if (!winnerId || !choiceIds.includes(winnerId)) {
-    return res.status(400).render("error", {
-      title: "Ошибка голосования",
-      message: "Неверный выбор для текущего этапа.",
-    });
+    return res.redirect(`/polls/${poll.slug}?vote_error=stale_choice`);
   }
 
   const rawUserState = db
