@@ -1265,13 +1265,15 @@ textarea {
 
 .report-participant-layout {
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
-  gap: 18px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
+  align-items: stretch;
 }
 
 .report-participant-media {
   align-self: start;
+  justify-self: center;
+  width: min(100%, 680px);
 }
 
 .report-media-card {
@@ -1316,6 +1318,14 @@ textarea {
 
 .report-participant-stats {
   min-width: 0;
+  width: 100%;
+  max-width: 1180px;
+  justify-self: center;
+}
+
+.report-participant-stats .table-wrap,
+.report-participant-stats .notice {
+  width: 100%;
 }
 
 .report-user {
