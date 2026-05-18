@@ -411,7 +411,7 @@
                             </form>
                           </td>
                           <td class="participant-actions">
-                            <form method="post" action="/admin/participants/<%= participant.id %>/witcher-toggle">
+                            <form method="post" action="/admin/participants/<%= participant.id %>/witcher-toggle" data-witcher-toggle-form="true">
                               <button class="ghost-button <%= participant.witcher_choice ? '' : 'witcher-button' %>" type="submit">
                                 <%= participant.witcher_choice ? "Снять выбор Ведьмака" : "Выбор Ведьмака" %>
                               </button>

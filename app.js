@@ -2974,14 +2974,22 @@ app.post("/admin/participants/:id/witcher-toggle", ensureAdmin, (req, res) => {
     .get(id);
 
   if (!participant) {
+    if (req.get("x-requested-with") === "XMLHttpRequest") {
+      return res.status(404).json({ ok: false, error: "Участник не найден." });
+    }
     return res.redirect("/admin");
   }
 
+  const nextValue = participant.witcher_choice ? 0 : 1;
   db.prepare("UPDATE participants SET witcher_choice = ?, updated_at = ? WHERE id = ?").run(
-    participant.witcher_choice ? 0 : 1,
+    nextValue,
     nowIso(),
     id,
   );
+
+  if (req.get("x-requested-with") === "XMLHttpRequest") {
+    return res.json({ ok: true, witcher_choice: Boolean(nextValue) });
+  }
 
   res.redirect("/admin");
 });

@@ -27,6 +27,8 @@ document.addEventListener("DOMContentLoaded", function () {
   if (playPage) {
     initPlayPage(playPage);
   }
+
+  initAdminWitcherToggles();
 });
 
 function bindAudioListenTracking(player) {
@@ -443,6 +445,59 @@ function initPlayPage(root) {
       if (index === currentIndex) {
         setActiveCard(currentIndex + 1);
       }
+    });
+  });
+}
+
+function initAdminWitcherToggles() {
+  var forms = document.querySelectorAll("[data-witcher-toggle-form='true']");
+
+  Array.prototype.forEach.call(forms, function (form) {
+    var button = form.querySelector("button[type='submit']");
+
+    if (!button) {
+      return;
+    }
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+
+      if (button.disabled) {
+        return;
+      }
+
+      button.disabled = true;
+
+      fetch(form.action, {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        credentials: "same-origin",
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error("Request failed");
+          }
+
+          return response.json();
+        })
+        .then(function (payload) {
+          var isEnabled = Boolean(payload && payload.witcher_choice);
+
+          button.textContent = isEnabled ? "Снять выбор Ведьмака" : "Выбор Ведьмака";
+          button.classList.toggle("witcher-button", !isEnabled);
+        })
+        .catch(function (error) {
+          if (window.console && console.error) {
+            console.error("Failed to toggle witcher choice", error);
+          }
+
+          window.location.href = "/admin";
+        })
+        .finally(function () {
+          button.disabled = false;
+        });
     });
   });
 }
