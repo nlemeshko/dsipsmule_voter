@@ -1053,7 +1053,7 @@ function buildBettingStageData(currentUserId, registrations) {
     basket.participants.push({
       id: getBettableRegistrationId(registration),
       name: String(registration.participants || "").trim(),
-      description: registration.telegram_username ? `@${registration.telegram_username}` : "",
+      description: "",
       image_url: buildParticipantImageUrl(registration.avatar_url),
       basket_code: basketCode,
       basket_name: basket.fullName,
