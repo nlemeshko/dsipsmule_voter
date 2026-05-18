@@ -223,8 +223,8 @@
       <section class="panel">
         <h2>Участники</h2>
         <div class="poll-groups">
-          <% pollsWithParticipants.forEach((poll, index) => { %>
-            <details class="poll-group" <%= index === 0 ? "open" : "" %>>
+          <% pollsWithParticipants.forEach((poll) => { %>
+            <details class="poll-group">
               <summary class="poll-group-summary">
                 <div>
                   <strong><%= poll.title %></strong>
@@ -437,96 +437,54 @@
       </section>
 
       <section class="panel">
-        <h2>Кто вошел через Telegram</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Telegram ID</th>
-                <th>Имя</th>
-                <th>Username</th>
-                <th>Raw Telegram payload</th>
-                <th>Первый вход</th>
-                <th>Последний вход</th>
-                <th>Входов</th>
-                <th>Сброс голосов</th>
-                <th>Сброс ставок</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% recentUsers.forEach((user) => { %>
-                <tr>
-                  <td><%= user.telegram_id %></td>
-                  <td><%= user.full_name || "—" %></td>
-                  <td><%= user.username ? `@${user.username}` : "—" %></td>
-                  <td class="payload-cell">
-                    <details>
-                      <summary>Показать</summary>
-                      <pre><%= user.raw_profile_json || "{}" %></pre>
-                    </details>
-                  </td>
-                  <td><%= formatDate(user.first_login_at) %></td>
-                  <td><%= formatDate(user.last_login_at) %></td>
-                  <td><%= user.login_count %></td>
-                  <td>
-                    <form
-                      method="post"
-                      action="/admin/users/<%= user.id %>/reset-votes"
-                      onsubmit="return confirm('Сбросить все голоса пользователя <%= (user.full_name || user.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
-                    >
-                      <button class="ghost-button danger-button" type="submit">Сбросить голоса</button>
-                    </form>
-                  </td>
-                  <td>
-                    <form
-                      method="post"
-                      action="/admin/users/<%= user.id %>/reset-bets"
-                      onsubmit="return confirm('Сбросить все ставки пользователя <%= (user.full_name || user.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
-                    >
-                      <button class="ghost-button danger-button" type="submit">Сбросить ставки</button>
-                    </form>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Последние ставки</h2>
-        <% if (!recentBets || recentBets.length === 0) { %>
-          <div class="notice">Ставок пока нет.</div>
-        <% } else { %>
+        <details class="poll-group">
+          <summary class="poll-group-summary">
+            <strong>Кто вошел через Telegram</strong>
+          </summary>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Когда</th>
-                  <th>Этап</th>
-                  <th>Корзина</th>
-                  <th>Участник</th>
-                  <th>Пользователь</th>
-                  <th>Действие</th>
+                  <th>Telegram ID</th>
+                  <th>Имя</th>
+                  <th>Username</th>
+                  <th>Raw Telegram payload</th>
+                  <th>Первый вход</th>
+                  <th>Последний вход</th>
+                  <th>Входов</th>
+                  <th>Сброс голосов</th>
+                  <th>Сброс ставок</th>
                 </tr>
               </thead>
               <tbody>
-                <% recentBets.forEach((bet) => { %>
+                <% recentUsers.forEach((user) => { %>
                   <tr>
-                    <td><%= formatDate(bet.updated_at || bet.created_at) %></td>
-                    <td><%= bet.poll_title || "Бурмалда" %></td>
-                    <td><%= bet.basket_name || `Корзина ${bet.basket_code}` %></td>
-                    <td><%= bet.participant_name || "—" %></td>
+                    <td><%= user.telegram_id %></td>
+                    <td><%= user.full_name || "—" %></td>
+                    <td><%= user.username ? `@${user.username}` : "—" %></td>
+                    <td class="payload-cell">
+                      <details>
+                        <summary>Показать</summary>
+                        <pre><%= user.raw_profile_json || "{}" %></pre>
+                      </details>
+                    </td>
+                    <td><%= formatDate(user.first_login_at) %></td>
+                    <td><%= formatDate(user.last_login_at) %></td>
+                    <td><%= user.login_count %></td>
                     <td>
-                      <%= bet.full_name || "—" %>
-                      <%= bet.username ? `(@${bet.username})` : "" %>
-                      · <%= bet.telegram_id %>
+                      <form
+                        method="post"
+                        action="/admin/users/<%= user.id %>/reset-votes"
+                        onsubmit="return confirm('Сбросить все голоса пользователя <%= (user.full_name || user.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
+                      >
+                        <button class="ghost-button danger-button" type="submit">Сбросить голоса</button>
+                      </form>
                     </td>
                     <td>
                       <form
                         method="post"
-                        action="/admin/users/<%= bet.user_id %>/reset-bets"
-                        onsubmit="return confirm('Сбросить все ставки пользователя <%= (bet.full_name || bet.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
+                        action="/admin/users/<%= user.id %>/reset-bets"
+                        onsubmit="return confirm('Сбросить все ставки пользователя <%= (user.full_name || user.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
                       >
                         <button class="ghost-button danger-button" type="submit">Сбросить ставки</button>
                       </form>
@@ -536,59 +494,113 @@
               </tbody>
             </table>
           </div>
-        <% } %>
+        </details>
       </section>
 
       <section class="panel">
-        <h2>Последние голоса</h2>
-        <div class="stack-list">
-          <% recentVotes.forEach((userVotes) => { %>
-            <details class="participant-votes vote-user-group">
-              <summary>
-                <strong><%= userVotes.full_name || "—" %></strong>
-                <span>
-                  <%= userVotes.username ? `@${userVotes.username}` : "без username" %>
-                  · Telegram ID: <%= userVotes.telegram_id %>
-                </span>
-                <span>
-                  Последний голос: <%= formatDate(userVotes.last_vote_at) %>
-                  · Всего голосов: <%= userVotes.votes.length %>
-                </span>
-              </summary>
-              <div class="vote-user-summary-actions">
-                <form
-                  method="post"
-                  action="/admin/users/<%= userVotes.user_id %>/reset-votes"
-                  onsubmit="return confirm('Сбросить все голоса пользователя <%= (userVotes.full_name || userVotes.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
-                >
-                  <button class="ghost-button danger-button" type="submit">Сбросить голоса пользователя</button>
-                </form>
-              </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
+        <details class="poll-group">
+          <summary class="poll-group-summary">
+            <strong>Последние ставки</strong>
+          </summary>
+          <% if (!recentBets || recentBets.length === 0) { %>
+            <div class="notice">Ставок пока нет.</div>
+          <% } else { %>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Когда</th>
+                    <th>Этап</th>
+                    <th>Корзина</th>
+                    <th>Участник</th>
+                    <th>Пользователь</th>
+                    <th>Действие</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% recentBets.forEach((bet) => { %>
                     <tr>
-                      <th>Когда</th>
-                      <th>Выбрал</th>
-                      <th>Против</th>
-                      <th>Этап</th>
+                      <td><%= formatDate(bet.updated_at || bet.created_at) %></td>
+                      <td><%= bet.poll_title || "Бурмалда" %></td>
+                      <td><%= bet.basket_name || `Корзина ${bet.basket_code}` %></td>
+                      <td><%= bet.participant_name || "—" %></td>
+                      <td>
+                        <%= bet.full_name || "—" %>
+                        <%= bet.username ? `(@${bet.username})` : "" %>
+                        · <%= bet.telegram_id %>
+                      </td>
+                      <td>
+                        <form
+                          method="post"
+                          action="/admin/users/<%= bet.user_id %>/reset-bets"
+                          onsubmit="return confirm('Сбросить все ставки пользователя <%= (bet.full_name || bet.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
+                        >
+                          <button class="ghost-button danger-button" type="submit">Сбросить ставки</button>
+                        </form>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    <% userVotes.votes.forEach((vote) => { %>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </details>
+      </section>
+
+      <section class="panel">
+        <details class="poll-group">
+          <summary class="poll-group-summary">
+            <strong>Последние голоса</strong>
+          </summary>
+          <div class="stack-list">
+            <% recentVotes.forEach((userVotes) => { %>
+              <details class="participant-votes vote-user-group">
+                <summary>
+                  <strong><%= userVotes.full_name || "—" %></strong>
+                  <span>
+                    <%= userVotes.username ? `@${userVotes.username}` : "без username" %>
+                    · Telegram ID: <%= userVotes.telegram_id %>
+                  </span>
+                  <span>
+                    Последний голос: <%= formatDate(userVotes.last_vote_at) %>
+                    · Всего голосов: <%= userVotes.votes.length %>
+                  </span>
+                </summary>
+                <div class="vote-user-summary-actions">
+                  <form
+                    method="post"
+                    action="/admin/users/<%= userVotes.user_id %>/reset-votes"
+                    onsubmit="return confirm('Сбросить все голоса пользователя <%= (userVotes.full_name || userVotes.telegram_id || 'без имени').replace(/'/g, '\\&#39;') %>?')"
+                  >
+                    <button class="ghost-button danger-button" type="submit">Сбросить голоса пользователя</button>
+                  </form>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
                       <tr>
-                        <td><%= formatDate(vote.created_at) %></td>
-                        <td><%= vote.winner_name %></td>
-                        <td><%= vote.loser_name %></td>
-                        <td><%= vote.poll_title %></td>
+                        <th>Когда</th>
+                        <th>Выбрал</th>
+                        <th>Против</th>
+                        <th>Этап</th>
                       </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          <% }) %>
-        </div>
+                    </thead>
+                    <tbody>
+                      <% userVotes.votes.forEach((vote) => { %>
+                        <tr>
+                          <td><%= formatDate(vote.created_at) %></td>
+                          <td><%= vote.winner_name %></td>
+                          <td><%= vote.loser_name %></td>
+                          <td><%= vote.poll_title %></td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            <% }) %>
+          </div>
+        </details>
       </section>
       <footer class="site-footer">
         <span>© 2026 Witcher by <a href="https://mdsn.work" target="_blank" rel="noreferrer">MDSN</a> | All Rights Reserved | Powered by <a href="https://t.me/kelahselai" target="_blank" rel="noreferrer">Nicky</a></span>
