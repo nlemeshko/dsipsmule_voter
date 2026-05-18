@@ -95,20 +95,58 @@
               </summary>
               <div class="report-participant-body">
                 <div class="report-participant-layout">
-                  <% if (participant.playback_url) { %>
-                    <aside class="report-participant-media">
-                      <div class="audio-entry">
-                        <span class="audio-entry-label">Аудио участника</span>
-                        <audio
-                          class="audio-player"
-                          controls
-                          preload="none"
-                          controlsList="nodownload noplaybackrate"
-                          src="<%= participant.playback_url %>"
-                        ></audio>
+                  <aside class="report-participant-media">
+                    <div class="report-media-card">
+                      <div class="report-media-cover">
+                        <% if (participant.song_image_url) { %>
+                          <img class="play-song-cover" src="<%= participant.song_image_url %>" alt="Обложка песни <%= participant.description || participant.name %>" loading="lazy" decoding="async" />
+                        <% } else { %>
+                          <div class="play-song-cover-fallback"><span><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span></div>
+                        <% } %>
                       </div>
-                    </aside>
-                  <% } %>
+
+                      <div class="report-media-copy">
+                        <div class="play-identity">
+                          <% if (participant.image_url) { %>
+                            <img class="play-avatar" src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                          <% } else { %>
+                            <div class="play-avatar play-avatar-fallback"><span><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span></div>
+                          <% } %>
+
+                          <div>
+                            <span class="eyebrow">Участник</span>
+                            <h3 class="report-media-title"><%= participant.name %></h3>
+                            <p class="play-song-title"><%= participant.description || "Без названия песни" %></p>
+                          </div>
+                        </div>
+
+                        <% if (participant.playback_url) { %>
+                          <div class="play-audio-block report-audio-block">
+                            <span class="audio-entry-label">Аудио участника</span>
+                            <audio
+                              class="audio-player"
+                              controls
+                              preload="none"
+                              controlsList="nodownload noplaybackrate"
+                              src="<%= participant.playback_url %>"
+                              data-visualizer="true"
+                            ></audio>
+                          </div>
+                        <% } else { %>
+                          <div class="notice">Для этого участника аудио пока не добавлено.</div>
+                        <% } %>
+
+                        <section class="report-lyrics-panel">
+                          <span class="eyebrow">Текст песни</span>
+                          <% if (participant.lyrics_text) { %>
+                            <pre class="play-lyrics report-lyrics"><%= participant.lyrics_text %></pre>
+                          <% } else { %>
+                            <div class="notice">Текст песни еще не добавлен.</div>
+                          <% } %>
+                        </section>
+                      </div>
+                    </div>
+                  </aside>
 
                   <div class="report-participant-stats">
                     <% if (participant.voteDetails.length === 0) { %>
@@ -230,6 +268,7 @@
         <span>© 2026 Witcher by <a href="https://mdsn.work" target="_blank" rel="noreferrer">MDSN</a> | All Rights Reserved | Powered by <a href="https://t.me/kelahselai" target="_blank" rel="noreferrer">Nicky</a></span>
       </footer>
     </main>
+    <script src="/site.js" defer></script>
     <script src="/report-chart.js" defer></script>
   </body>
 </html>
