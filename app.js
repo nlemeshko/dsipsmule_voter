@@ -890,9 +890,9 @@ function parseCsvLine(line) {
 function buildRegistrationKey(entry) {
   return Buffer.from(
     JSON.stringify({
+      registered_at_utc: entry.registered_at_utc,
       telegram_user_id: entry.telegram_user_id,
       participants: entry.participants,
-      category_code: entry.category_code,
     }),
   ).toString("base64url");
 }
@@ -924,14 +924,14 @@ function mergeRegistrationEntries(entries) {
     mergedEntries.set(dedupKey, {
       ...existing,
       ...entry,
-      registered_at_utc: String(entry.registered_at_utc || existing.registered_at_utc || "").trim(),
-      telegram_user_id: String(entry.telegram_user_id || existing.telegram_user_id || "").trim(),
-      telegram_username: String(entry.telegram_username || existing.telegram_username || "").trim(),
-      telegram_full_name: String(entry.telegram_full_name || existing.telegram_full_name || "").trim(),
-      participants: String(entry.participants || existing.participants || "").trim(),
-      category_code: String(entry.category_code || existing.category_code || "").trim(),
-      category_name: String(entry.category_name || existing.category_name || "").trim(),
-      avatar_url: String(entry.avatar_url || existing.avatar_url || "").trim(),
+      registered_at_utc: String(existing.registered_at_utc || entry.registered_at_utc || "").trim(),
+      telegram_user_id: String(existing.telegram_user_id || entry.telegram_user_id || "").trim(),
+      telegram_username: String(existing.telegram_username || entry.telegram_username || "").trim(),
+      telegram_full_name: String(existing.telegram_full_name || entry.telegram_full_name || "").trim(),
+      participants: String(existing.participants || entry.participants || "").trim(),
+      category_code: String(existing.category_code || entry.category_code || "").trim(),
+      category_name: String(existing.category_name || entry.category_name || "").trim(),
+      avatar_url: String(existing.avatar_url || entry.avatar_url || "").trim(),
     });
   });
 
