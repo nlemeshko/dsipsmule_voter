@@ -20,6 +20,11 @@ npm install
 npm run dev
 ```
 
+Для списка участников можно задать `REGISTRATIONS_CSV_URLS` как один URL или несколько URL через запятую. По умолчанию сервис пытается объединять:
+
+- `nassal2026_registrations.csv`
+- `nassal2026_final.csv`
+
 ## Docker
 
 Сборка образа:

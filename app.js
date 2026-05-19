@@ -19,9 +19,10 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
 const SESSION_SECRET =
   process.env.SESSION_SECRET || "replace-this-with-a-long-random-secret";
-const REGISTRATIONS_CSV_URL =
-  process.env.REGISTRATIONS_CSV_URL ||
-  "https://nbg1.your-objectstorage.com/nassal2026/registrations/nassal2026_registrations.csv";
+const DEFAULT_REGISTRATIONS_CSV_URLS = [
+  "https://nbg1.your-objectstorage.com/nassal2026/registrations/nassal2026_registrations.csv",
+  "https://nbg1.your-objectstorage.com/nassal2026/registrations/nassal2026_final.csv",
+];
 const MAX_AUDIO_UPLOAD_MB = Number(process.env.MAX_AUDIO_UPLOAD_MB || 50);
 const DB_PATH =
   process.env.DB_PATH || path.join(__dirname, "storage", "voting.sqlite");
@@ -38,6 +39,20 @@ const registrationsCache = {
   loadedAt: 0,
   entries: [],
 };
+
+function parseRegistrationsCsvUrls(value) {
+  return String(value || "")
+    .split(/[\n,]/)
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean);
+}
+
+const REGISTRATIONS_CSV_URLS = parseRegistrationsCsvUrls(
+  process.env.REGISTRATIONS_CSV_URLS || process.env.REGISTRATIONS_CSV_URL,
+);
+const REGISTRATIONS_CATALOG_URLS = REGISTRATIONS_CSV_URLS.length > 0
+  ? REGISTRATIONS_CSV_URLS
+  : DEFAULT_REGISTRATIONS_CSV_URLS;
 
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
@@ -875,27 +890,58 @@ function parseCsvLine(line) {
 function buildRegistrationKey(entry) {
   return Buffer.from(
     JSON.stringify({
-      registered_at_utc: entry.registered_at_utc,
       telegram_user_id: entry.telegram_user_id,
       participants: entry.participants,
+      category_code: entry.category_code,
     }),
   ).toString("base64url");
 }
 
-async function loadRegistrationsCatalog(force = false) {
-  const cacheIsFresh =
-    !force &&
-    registrationsCache.loadedAt &&
-    Date.now() - registrationsCache.loadedAt < REGISTRATIONS_CACHE_TTL_MS &&
-    registrationsCache.entries.length > 0;
+function buildRegistrationDedupKey(entry) {
+  const telegramUserId = String(entry?.telegram_user_id || "").trim();
+  const participantName = String(entry?.participants || "").trim().toLowerCase();
+  const categoryCode = String(entry?.category_code || "").trim();
 
-  if (cacheIsFresh) {
-    return registrationsCache.entries;
+  if (telegramUserId && participantName) {
+    return `telegram:${telegramUserId}:${categoryCode}:${participantName}`;
   }
 
-  const response = await fetch(REGISTRATIONS_CSV_URL);
+  return `participant:${categoryCode}:${participantName}`;
+}
+
+function mergeRegistrationEntries(entries) {
+  const mergedEntries = new Map();
+
+  entries.forEach((entry) => {
+    const dedupKey = buildRegistrationDedupKey(entry);
+    const existing = mergedEntries.get(dedupKey);
+
+    if (!existing) {
+      mergedEntries.set(dedupKey, entry);
+      return;
+    }
+
+    mergedEntries.set(dedupKey, {
+      ...existing,
+      ...entry,
+      registered_at_utc: String(entry.registered_at_utc || existing.registered_at_utc || "").trim(),
+      telegram_user_id: String(entry.telegram_user_id || existing.telegram_user_id || "").trim(),
+      telegram_username: String(entry.telegram_username || existing.telegram_username || "").trim(),
+      telegram_full_name: String(entry.telegram_full_name || existing.telegram_full_name || "").trim(),
+      participants: String(entry.participants || existing.participants || "").trim(),
+      category_code: String(entry.category_code || existing.category_code || "").trim(),
+      category_name: String(entry.category_name || existing.category_name || "").trim(),
+      avatar_url: String(entry.avatar_url || existing.avatar_url || "").trim(),
+    });
+  });
+
+  return Array.from(mergedEntries.values());
+}
+
+async function loadRegistrationsFromCsvUrl(url) {
+  const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Не удалось загрузить CSV регистраций: ${response.status}`);
+    throw new Error(`Не удалось загрузить CSV регистраций (${url}): ${response.status}`);
   }
 
   const rawCsv = await response.text();
@@ -905,13 +951,11 @@ async function loadRegistrationsCatalog(force = false) {
     .filter(Boolean);
 
   if (lines.length <= 1) {
-    registrationsCache.entries = [];
-    registrationsCache.loadedAt = Date.now();
-    return registrationsCache.entries;
+    return [];
   }
 
   const headers = parseCsvLine(lines[0]);
-  const entries = lines
+  return lines
     .slice(1)
     .map((line) => {
       const values = parseCsvLine(line);
@@ -932,7 +976,39 @@ async function loadRegistrationsCatalog(force = false) {
         avatar_url: row.avatar_url || "",
       };
     })
-    .filter((entry) => entry.participants)
+    .filter((entry) => entry.participants);
+}
+
+async function loadRegistrationsCatalog(force = false) {
+  const cacheIsFresh =
+    !force &&
+    registrationsCache.loadedAt &&
+    Date.now() - registrationsCache.loadedAt < REGISTRATIONS_CACHE_TTL_MS &&
+    registrationsCache.entries.length > 0;
+
+  if (cacheIsFresh) {
+    return registrationsCache.entries;
+  }
+
+  const settledResults = await Promise.allSettled(
+    REGISTRATIONS_CATALOG_URLS.map((url) => loadRegistrationsFromCsvUrl(url)),
+  );
+  const successfulEntries = settledResults
+    .filter((result) => result.status === "fulfilled")
+    .flatMap((result) => result.value);
+  const failedLoads = settledResults
+    .filter((result) => result.status === "rejected")
+    .map((result) => result.reason);
+
+  failedLoads.forEach((error) => {
+    console.warn(error?.message || error);
+  });
+
+  if (successfulEntries.length === 0) {
+    throw failedLoads[0] || new Error("Не удалось загрузить ни один CSV регистраций.");
+  }
+
+  const entries = mergeRegistrationEntries(successfulEntries)
     .map((entry) => ({
       ...entry,
       key: buildRegistrationKey(entry),
