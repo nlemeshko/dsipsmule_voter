@@ -312,37 +312,32 @@
   function detectBpm(samples, sampleRate) {
     var envelopeRate = 200;
     var envelope = buildAmplitudeEnvelope(samples, sampleRate, envelopeRate);
-    var peaks = collectEnvelopePeaks(envelope, envelopeRate);
-    var intervalCounts = new Map();
-    var bestEntry = null;
-    var peakIndex;
-    var offset;
+    var onsetEnvelope = buildOnsetEnvelope(envelope);
+    var bestScore = 0;
+    var bestLag = 0;
+    var minBpm = 70;
+    var maxBpm = 200;
+    var minLag = Math.round((60 * envelopeRate) / maxBpm);
+    var maxLag = Math.round((60 * envelopeRate) / minBpm);
+    var lag;
 
-    if (peaks.length < 2) {
+    if (onsetEnvelope.length < maxLag * 2) {
       return 0;
     }
 
-    for (peakIndex = 0; peakIndex < peaks.length; peakIndex += 1) {
-      for (offset = 1; offset <= 8 && peakIndex + offset < peaks.length; offset += 1) {
-        var seconds = peaks[peakIndex + offset] - peaks[peakIndex];
-        var bpm = seconds > 0 ? 60 / seconds : 0;
-        var normalizedBpm = normalizeBpm(bpm);
-
-        if (!normalizedBpm) {
-          continue;
-        }
-
-        intervalCounts.set(normalizedBpm, (intervalCounts.get(normalizedBpm) || 0) + 1);
+    for (lag = minLag; lag <= maxLag; lag += 1) {
+      var score = autocorrelateEnvelope(onsetEnvelope, lag);
+      if (score > bestScore) {
+        bestScore = score;
+        bestLag = lag;
       }
     }
 
-    intervalCounts.forEach(function (count, bpmValue) {
-      if (!bestEntry || count > bestEntry.count) {
-        bestEntry = { bpm: Number(bpmValue), count: count };
-      }
-    });
+    if (!bestLag || bestScore <= 0) {
+      return 0;
+    }
 
-    return bestEntry ? bestEntry.bpm : 0;
+    return Math.round((60 * envelopeRate) / bestLag);
   }
 
   function buildAmplitudeEnvelope(samples, sampleRate, envelopeRate) {
@@ -389,56 +384,39 @@
     return smoothed;
   }
 
-  function collectEnvelopePeaks(envelope, envelopeRate) {
-    var average = 0;
-    var threshold;
-    var peaks = [];
-    var minDistance = Math.round(envelopeRate * 0.25);
-    var lastPeakIndex = -minDistance;
+  function buildOnsetEnvelope(envelope) {
+    var onset = new Float32Array(envelope.length);
+    var smoothed = smoothEnvelope(envelope, 6);
     var index;
 
-    for (index = 0; index < envelope.length; index += 1) {
-      average += envelope[index];
-    }
-    average /= Math.max(1, envelope.length);
-    threshold = average * 1.35;
-
-    for (index = 1; index < envelope.length - 1; index += 1) {
-      var value = envelope[index];
-      if (
-        value >= threshold &&
-        value >= envelope[index - 1] &&
-        value > envelope[index + 1] &&
-        index - lastPeakIndex >= minDistance
-      ) {
-        peaks.push(index / envelopeRate);
-        lastPeakIndex = index;
-      }
+    for (index = 1; index < smoothed.length; index += 1) {
+      var delta = smoothed[index] - smoothed[index - 1];
+      onset[index] = delta > 0 ? delta : 0;
     }
 
-    return peaks;
+    return smoothEnvelope(onset, 3);
   }
 
-  function normalizeBpm(bpm) {
-    var normalized = Math.round(bpm);
+  function autocorrelateEnvelope(envelope, lag) {
+    var length = envelope.length - lag;
+    var leftEnergy = 0;
+    var rightEnergy = 0;
+    var numerator = 0;
+    var index;
 
-    if (!Number.isFinite(normalized) || normalized <= 0) {
+    for (index = 0; index < length; index += 1) {
+      var left = envelope[index];
+      var right = envelope[index + lag];
+      numerator += left * right;
+      leftEnergy += left * left;
+      rightEnergy += right * right;
+    }
+
+    if (!leftEnergy || !rightEnergy) {
       return 0;
     }
 
-    while (normalized < 70) {
-      normalized *= 2;
-    }
-
-    while (normalized > 200) {
-      normalized = Math.round(normalized / 2);
-    }
-
-    if (normalized < 70 || normalized > 200) {
-      return 0;
-    }
-
-    return normalized;
+    return numerator / Math.sqrt(leftEnergy * rightEnergy);
   }
 
   function frequencyToMidi(frequency) {
