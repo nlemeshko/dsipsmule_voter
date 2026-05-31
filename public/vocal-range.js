@@ -97,6 +97,7 @@
     var mono = mixToMono(audioBuffer);
     var resampled = resampleMono(mono, audioBuffer.sampleRate, targetSampleRate);
     var pitches = [];
+    var bpm;
     var totalFrames;
     var minLag = Math.max(2, Math.floor(targetSampleRate / maxFrequency));
     var maxLag = Math.max(minLag + 1, Math.floor(targetSampleRate / minFrequency));
@@ -107,6 +108,7 @@
     }
 
     totalFrames = Math.max(1, Math.floor((resampled.length - windowSize) / hopSize) + 1);
+    bpm = detectBpm(mono, audioBuffer.sampleRate);
 
     for (index = 0; index < totalFrames; index += 1) {
       var start = index * hopSize;
@@ -123,7 +125,7 @@
       }
     }
 
-    return summarizePitches(pitches);
+    return summarizePitches(pitches, bpm);
   }
 
   function mixToMono(audioBuffer) {
@@ -218,7 +220,7 @@
     return sampleRate / bestLag;
   }
 
-  function summarizePitches(pitches) {
+  function summarizePitches(pitches, bpm) {
     var noteCounts = new Map();
     var midiValues;
     var stableMidis;
@@ -284,6 +286,7 @@
       lowestFrequency: minPitch,
       highestFrequency: maxPitch,
       rangeSemitones: maxMidi - minMidi,
+      bpm: bpm,
     };
   }
 
@@ -299,9 +302,143 @@
       summary.highestNote + " • " + summary.highestFrequency.toFixed(1) + " Hz";
     document.getElementById("range-semitones").textContent =
       summary.rangeSemitones + " полутонов";
+    document.getElementById("song-bpm").textContent =
+      summary.bpm ? Math.round(summary.bpm) + " BPM" : "Не определен";
 
     resultsNode.hidden = false;
     detailsNode.hidden = false;
+  }
+
+  function detectBpm(samples, sampleRate) {
+    var envelopeRate = 200;
+    var envelope = buildAmplitudeEnvelope(samples, sampleRate, envelopeRate);
+    var peaks = collectEnvelopePeaks(envelope, envelopeRate);
+    var intervalCounts = new Map();
+    var bestEntry = null;
+    var peakIndex;
+    var offset;
+
+    if (peaks.length < 2) {
+      return 0;
+    }
+
+    for (peakIndex = 0; peakIndex < peaks.length; peakIndex += 1) {
+      for (offset = 1; offset <= 8 && peakIndex + offset < peaks.length; offset += 1) {
+        var seconds = peaks[peakIndex + offset] - peaks[peakIndex];
+        var bpm = seconds > 0 ? 60 / seconds : 0;
+        var normalizedBpm = normalizeBpm(bpm);
+
+        if (!normalizedBpm) {
+          continue;
+        }
+
+        intervalCounts.set(normalizedBpm, (intervalCounts.get(normalizedBpm) || 0) + 1);
+      }
+    }
+
+    intervalCounts.forEach(function (count, bpmValue) {
+      if (!bestEntry || count > bestEntry.count) {
+        bestEntry = { bpm: Number(bpmValue), count: count };
+      }
+    });
+
+    return bestEntry ? bestEntry.bpm : 0;
+  }
+
+  function buildAmplitudeEnvelope(samples, sampleRate, envelopeRate) {
+    var samplesPerStep = Math.max(1, Math.round(sampleRate / envelopeRate));
+    var envelopeLength = Math.max(1, Math.floor(samples.length / samplesPerStep));
+    var envelope = new Float32Array(envelopeLength);
+    var envelopeIndex;
+
+    for (envelopeIndex = 0; envelopeIndex < envelopeLength; envelopeIndex += 1) {
+      var start = envelopeIndex * samplesPerStep;
+      var end = Math.min(samples.length, start + samplesPerStep);
+      var energy = 0;
+      var sampleIndex;
+
+      for (sampleIndex = start; sampleIndex < end; sampleIndex += 1) {
+        energy += Math.abs(samples[sampleIndex]);
+      }
+
+      envelope[envelopeIndex] = energy / Math.max(1, end - start);
+    }
+
+    return smoothEnvelope(envelope, 4);
+  }
+
+  function smoothEnvelope(values, radius) {
+    var smoothed = new Float32Array(values.length);
+    var index;
+
+    for (index = 0; index < values.length; index += 1) {
+      var start = Math.max(0, index - radius);
+      var end = Math.min(values.length - 1, index + radius);
+      var total = 0;
+      var count = 0;
+      var cursor;
+
+      for (cursor = start; cursor <= end; cursor += 1) {
+        total += values[cursor];
+        count += 1;
+      }
+
+      smoothed[index] = total / Math.max(1, count);
+    }
+
+    return smoothed;
+  }
+
+  function collectEnvelopePeaks(envelope, envelopeRate) {
+    var average = 0;
+    var threshold;
+    var peaks = [];
+    var minDistance = Math.round(envelopeRate * 0.25);
+    var lastPeakIndex = -minDistance;
+    var index;
+
+    for (index = 0; index < envelope.length; index += 1) {
+      average += envelope[index];
+    }
+    average /= Math.max(1, envelope.length);
+    threshold = average * 1.35;
+
+    for (index = 1; index < envelope.length - 1; index += 1) {
+      var value = envelope[index];
+      if (
+        value >= threshold &&
+        value >= envelope[index - 1] &&
+        value > envelope[index + 1] &&
+        index - lastPeakIndex >= minDistance
+      ) {
+        peaks.push(index / envelopeRate);
+        lastPeakIndex = index;
+      }
+    }
+
+    return peaks;
+  }
+
+  function normalizeBpm(bpm) {
+    var normalized = Math.round(bpm);
+
+    if (!Number.isFinite(normalized) || normalized <= 0) {
+      return 0;
+    }
+
+    while (normalized < 70) {
+      normalized *= 2;
+    }
+
+    while (normalized > 200) {
+      normalized = Math.round(normalized / 2);
+    }
+
+    if (normalized < 70 || normalized > 200) {
+      return 0;
+    }
+
+    return normalized;
   }
 
   function frequencyToMidi(frequency) {
