@@ -25,12 +25,6 @@ npm run dev
 - `nassal2026_registrations.csv`
 - `nassal2026_final.csv`
 
-Для страницы `/vocal-range` можно дополнительно настроить переводчик через совместимый API перевода:
-
-- `TRANSLATE_API_URL` — базовый URL сервиса, например LibreTranslate;
-- `TRANSLATE_API_KEY` — опциональный ключ;
-- `TRANSLATE_API_TIMEOUT_MS` — таймаут запроса в миллисекундах.
-
 ## Docker
 
 Сборка образа:

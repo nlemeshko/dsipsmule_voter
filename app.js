@@ -24,9 +24,6 @@ const DEFAULT_REGISTRATIONS_CSV_URLS = [
   "https://nbg1.your-objectstorage.com/nassal2026/registrations/nassal2026_final.csv",
 ];
 const MAX_AUDIO_UPLOAD_MB = Number(process.env.MAX_AUDIO_UPLOAD_MB || 50);
-const TRANSLATE_API_URL = String(process.env.TRANSLATE_API_URL || "").trim().replace(/\/+$/, "");
-const TRANSLATE_API_KEY = String(process.env.TRANSLATE_API_KEY || "").trim();
-const TRANSLATE_API_TIMEOUT_MS = Number(process.env.TRANSLATE_API_TIMEOUT_MS || 20000);
 const DB_PATH =
   process.env.DB_PATH || path.join(__dirname, "storage", "voting.sqlite");
 const STORAGE_DIR = path.dirname(DB_PATH);
@@ -718,122 +715,6 @@ function escapeAttribute(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;");
-}
-
-function isTranslationApiConfigured() {
-  return Boolean(TRANSLATE_API_URL);
-}
-
-function buildTranslateApiHeaders() {
-  return {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  };
-}
-
-async function callTranslateApi(endpointPath, payload) {
-  if (!isTranslationApiConfigured()) {
-    throw new Error("Translation API is not configured.");
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TRANSLATE_API_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`${TRANSLATE_API_URL}${endpointPath}`, {
-      method: "POST",
-      headers: buildTranslateApiHeaders(),
-      body: JSON.stringify({
-        ...payload,
-        ...(TRANSLATE_API_KEY ? { api_key: TRANSLATE_API_KEY } : {}),
-      }),
-      signal: controller.signal,
-    });
-
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      const message = data?.error || data?.message || `Translation API error (${response.status})`;
-      throw new Error(message);
-    }
-
-    return data;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function detectTranslationLanguage(text) {
-  const data = await callTranslateApi("/detect", { q: text });
-  const detections = Array.isArray(data) ? data : [];
-  const bestMatch = detections
-    .filter((entry) => entry && entry.language)
-    .sort((left, right) => Number(right.confidence || 0) - Number(left.confidence || 0))[0];
-
-  return String(bestMatch?.language || "").trim().toLowerCase();
-}
-
-async function translateText(text, sourceLanguage, targetLanguage) {
-  const data = await callTranslateApi("/translate", {
-    q: text,
-    source: sourceLanguage,
-    target: targetLanguage,
-    format: "text",
-  });
-
-  return String(data?.translatedText || "").trim();
-}
-
-function normalizeTranslationLanguage(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-
-  if (!normalized || normalized === "auto") {
-    return "auto";
-  }
-
-  if (normalized === "zh-cn" || normalized === "zh-hans") {
-    return "zh";
-  }
-
-  return normalized;
-}
-
-async function buildTranslationChain(text, requestedSourceLanguage = "auto") {
-  const normalizedSource = normalizeTranslationLanguage(requestedSourceLanguage);
-  const detectedSource = normalizedSource === "auto"
-    ? await detectTranslationLanguage(text)
-    : normalizedSource;
-
-  if (!detectedSource) {
-    throw new Error("Не удалось определить исходный язык текста.");
-  }
-
-  const stages = [
-    { label: "Оригинал", language: detectedSource, text },
-  ];
-  const chainTargets = [
-    { label: "Китайский (упрощенный)", language: "zh" },
-    { label: "Арабский", language: "ar" },
-    { label: "Финский", language: "fi" },
-    { label: "Оригинал", language: detectedSource },
-  ];
-
-  let currentText = text;
-  let currentLanguage = detectedSource;
-
-  for (const target of chainTargets) {
-    currentText = await translateText(currentText, currentLanguage, target.language);
-    currentLanguage = target.language;
-    stages.push({
-      label: target.label,
-      language: target.language,
-      text: currentText,
-    });
-  }
-
-  return {
-    detectedSourceLanguage: detectedSource,
-    stages,
-  };
 }
 
 function participantAudioBaseName(participantId) {
@@ -2443,38 +2324,7 @@ app.get("/polls/:slug/report/export.xls", (req, res) => {
 });
 
 app.get("/vocal-range", (req, res) => {
-  res.render("vocal-range", {
-    translationConfigured: isTranslationApiConfigured(),
-  });
-});
-
-app.post("/api/vocal-range/translate-chain", async (req, res, next) => {
-  const text = String(req.body?.text || "").trim();
-  const sourceLanguage = String(req.body?.sourceLanguage || "auto").trim();
-
-  if (!text) {
-    return res.status(400).json({
-      ok: false,
-      error: "Введите текст для перевода.",
-    });
-  }
-
-  if (!isTranslationApiConfigured()) {
-    return res.status(503).json({
-      ok: false,
-      error: "Переводчик еще не настроен на сервере. Нужен TRANSLATE_API_URL.",
-    });
-  }
-
-  try {
-    const result = await buildTranslationChain(text, sourceLanguage);
-    return res.json({
-      ok: true,
-      ...result,
-    });
-  } catch (error) {
-    return next(error);
-  }
+  res.render("vocal-range");
 });
 
 function finishTelegramLogin(req, res, payload, mode = "json") {
