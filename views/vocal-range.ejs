@@ -80,6 +80,50 @@
             </article>
           </div>
         </section>
+
+        <section class="panel vocal-range-translate">
+          <div class="hero-copy">
+            <span class="eyebrow">Translator</span>
+            <h2>Переводчик по цепочке</h2>
+            <p>Оригинал → Китайский (упрощенный) → Арабский → Финский → Оригинал.</p>
+            <% if (!translationConfigured) { %>
+              <div class="notice notice-error">
+                Переводчик пока не настроен на сервере. Для работы нужен `TRANSLATE_API_URL`.
+              </div>
+            <% } %>
+          </div>
+
+          <form class="stack-form vocal-range-translate-form" id="translate-chain-form">
+            <label for="translate-source-language">
+              Исходный язык
+              <select id="translate-source-language" name="sourceLanguage">
+                <option value="auto">Определить автоматически</option>
+                <option value="ru">Русский</option>
+                <option value="uk">Украинский</option>
+                <option value="en">Английский</option>
+                <option value="de">Немецкий</option>
+                <option value="es">Испанский</option>
+                <option value="fr">Французский</option>
+                <option value="it">Итальянский</option>
+              </select>
+            </label>
+
+            <label for="translate-input">
+              Текст
+              <textarea id="translate-input" name="text" rows="6" placeholder="Вставьте текст для перевода"></textarea>
+            </label>
+
+            <button class="primary-button" id="translate-chain-button" type="submit">
+              Перевести по цепочке
+            </button>
+          </form>
+
+          <div class="notice" id="translate-chain-status">
+            Вставьте текст и запустите перевод.
+          </div>
+
+          <section class="cards-grid vocal-range-translate-results" id="translate-chain-results" hidden></section>
+        </section>
       </section>
 
       <footer class="site-footer">

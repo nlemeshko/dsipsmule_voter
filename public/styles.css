@@ -3129,6 +3129,48 @@ td {
   z-index: 1;
 }
 
+.vocal-range-translate {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 20px;
+}
+
+.vocal-range-translate-form textarea {
+  min-height: 160px;
+}
+
+.vocal-range-translate-results {
+  position: relative;
+  z-index: 1;
+}
+
+.vocal-range-translate-card {
+  display: grid;
+  gap: 10px;
+  border-radius: 24px;
+  padding: 22px;
+}
+
+.vocal-range-translate-card span,
+.vocal-range-translate-card strong {
+  display: block;
+}
+
+.vocal-range-translate-card span {
+  color: var(--muted);
+}
+
+.vocal-range-translate-card strong {
+  font-size: clamp(1.45rem, 2vw, 1.9rem);
+}
+
+.vocal-range-translate-card p {
+  margin: 0;
+  white-space: normal;
+  word-break: break-word;
+}
+
 .vocal-range-detail-card {
   border-radius: 24px;
   padding: 22px;

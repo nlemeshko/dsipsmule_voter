@@ -11,6 +11,12 @@
   var resultsNode = document.getElementById("analysis-results");
   var detailsNode = document.getElementById("analysis-details");
   var analyzeButton = document.getElementById("analyze-button");
+  var translateForm = document.getElementById("translate-chain-form");
+  var translateInput = document.getElementById("translate-input");
+  var translateSourceLanguage = document.getElementById("translate-source-language");
+  var translateStatusNode = document.getElementById("translate-chain-status");
+  var translateResultsNode = document.getElementById("translate-chain-results");
+  var translateButton = document.getElementById("translate-chain-button");
 
   if (!analysisForm || !fileInput || !statusNode || !analyzeButton) {
     return;
@@ -64,6 +70,55 @@
     }
   });
 
+  if (translateForm && translateInput && translateStatusNode && translateResultsNode && translateButton) {
+    translateForm.addEventListener("submit", async function (event) {
+      var text = String(translateInput.value || "").trim();
+      var sourceLanguage = translateSourceLanguage ? translateSourceLanguage.value : "auto";
+
+      event.preventDefault();
+
+      if (!text) {
+        setTranslateStatus("Введите текст для перевода.", true);
+        hideTranslateResults();
+        return;
+      }
+
+      translateButton.disabled = true;
+      hideTranslateResults();
+
+      try {
+        setTranslateStatus("Запускаю цепочку перевода...");
+        var response = await fetch("/api/vocal-range/translate-chain", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            text: text,
+            sourceLanguage: sourceLanguage,
+          }),
+        });
+        var payload = await response.json().catch(function () {
+          return null;
+        });
+
+        if (!response.ok || !payload || !payload.ok) {
+          throw new Error(payload && payload.error ? payload.error : "Не удалось выполнить перевод.");
+        }
+
+        renderTranslationChain(payload);
+        setTranslateStatus("Перевод завершен.");
+      } catch (error) {
+        console.error(error);
+        setTranslateStatus(error && error.message ? error.message : "Не удалось выполнить перевод.", true);
+        hideTranslateResults();
+      } finally {
+        translateButton.disabled = false;
+      }
+    });
+  }
+
   function setStatus(message, isError) {
     statusNode.textContent = message;
     statusNode.classList.toggle("notice-error", Boolean(isError));
@@ -72,6 +127,32 @@
   function hideResults() {
     resultsNode.hidden = true;
     detailsNode.hidden = true;
+  }
+
+  function setTranslateStatus(message, isError) {
+    translateStatusNode.textContent = message;
+    translateStatusNode.classList.toggle("notice-error", Boolean(isError));
+  }
+
+  function hideTranslateResults() {
+    translateResultsNode.hidden = true;
+    translateResultsNode.innerHTML = "";
+  }
+
+  function renderTranslationChain(payload) {
+    var stages = Array.isArray(payload.stages) ? payload.stages : [];
+
+    translateResultsNode.innerHTML = stages.map(function (stage) {
+      return [
+        '<article class="mini-card vocal-range-translate-card">',
+        '<span>' + escapeHtml(stage.label || "") + '</span>',
+        '<strong>' + escapeHtml(String(stage.language || "").toUpperCase()) + '</strong>',
+        '<p>' + escapeHtml(stage.text || "").replace(/\n/g, "<br />") + "</p>",
+        "</article>",
+      ].join("");
+    }).join("");
+
+    translateResultsNode.hidden = false;
   }
 
   async function decodeAudioFile(file) {
@@ -435,5 +516,14 @@
     return new Promise(function (resolve) {
       window.setTimeout(resolve, 0);
     });
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 })();
