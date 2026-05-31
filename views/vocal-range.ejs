@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vocal Range | dsipsmule.one</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Amatic+SC:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell shell-narrow vocal-range-shell">
+      <section class="hero vocal-range-hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Direct Link Tool</span>
+          <h1>Vocal Range</h1>
+          <p>
+            Загрузите аудиофайл, и страница покажет самую низкую ноту,
+            самую высокую ноту и полный диапазон песни.
+          </p>
+          <div class="notice">
+            Анализ выполняется прямо в браузере. Файл никуда не отправляется.
+          </div>
+        </div>
+
+        <form class="stack-form vocal-range-form" id="vocal-range-form">
+          <label for="audio-file">
+            Аудиофайл
+            <input id="audio-file" name="audio" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.oga,.flac" required />
+          </label>
+
+          <audio id="audio-preview" controls preload="metadata" class="vocal-range-preview" hidden></audio>
+
+          <button class="primary-button" id="analyze-button" type="submit">
+            Проанализировать диапазон
+          </button>
+        </form>
+
+        <div class="notice" id="analysis-status">
+          Выберите файл и запустите анализ.
+        </div>
+
+        <section class="stat-grid vocal-range-stats" id="analysis-results" hidden>
+          <article class="stat-card">
+            <span>Самая низкая нота</span>
+            <strong id="lowest-note">-</strong>
+          </article>
+          <article class="stat-card">
+            <span>Самая высокая нота</span>
+            <strong id="highest-note">-</strong>
+          </article>
+          <article class="stat-card">
+            <span>Диапазон песни</span>
+            <strong id="song-range">-</strong>
+          </article>
+        </section>
+
+        <section class="panel vocal-range-details" id="analysis-details" hidden>
+          <h2>Детали анализа</h2>
+          <div class="cards-grid">
+            <article class="mini-card vocal-range-detail-card">
+              <span>Нижняя граница</span>
+              <strong id="lowest-frequency">-</strong>
+            </article>
+            <article class="mini-card vocal-range-detail-card">
+              <span>Верхняя граница</span>
+              <strong id="highest-frequency">-</strong>
+            </article>
+            <article class="mini-card vocal-range-detail-card">
+              <span>Точность диапазона</span>
+              <strong id="range-semitones">-</strong>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <footer class="site-footer">
+        <span>Private utility page for direct access only.</span>
+      </footer>
+    </main>
+    <script src="/vocal-range.js" defer></script>
+  </body>
+</html>

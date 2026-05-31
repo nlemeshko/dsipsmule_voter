@@ -3094,6 +3094,62 @@ td {
   font-size: clamp(1.3rem, 1.8vw, 1.7rem);
 }
 
+.vocal-range-shell {
+  width: min(820px, calc(100% - 32px));
+}
+
+.vocal-range-hero {
+  gap: 24px;
+}
+
+.vocal-range-form {
+  position: relative;
+  z-index: 1;
+}
+
+.vocal-range-form input[type="file"] {
+  padding: 18px;
+  border-style: dashed;
+  border-color: rgba(215, 224, 234, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.vocal-range-preview {
+  width: 100%;
+}
+
+.vocal-range-stats {
+  position: relative;
+  z-index: 1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.vocal-range-details {
+  position: relative;
+  z-index: 1;
+}
+
+.vocal-range-detail-card {
+  border-radius: 24px;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.vocal-range-detail-card span,
+.vocal-range-detail-card strong {
+  display: block;
+}
+
+.vocal-range-detail-card span {
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.vocal-range-detail-card strong {
+  font-size: clamp(1.7rem, 2.4vw, 2.2rem);
+}
+
 @media (max-width: 980px) {
   .play-layout,
   .play-hero,
@@ -3105,6 +3161,10 @@ td {
   .play-queue-head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .vocal-range-stats {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3132,6 +3192,10 @@ td {
   .play-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .vocal-range-shell {
+    width: min(820px, calc(100% - 20px));
   }
 }
 

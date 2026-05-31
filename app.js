@@ -2323,6 +2323,10 @@ app.get("/polls/:slug/report/export.xls", (req, res) => {
   res.send(`\uFEFF${renderPollReportExcel(report)}`);
 });
 
+app.get("/vocal-range", (req, res) => {
+  res.render("vocal-range");
+});
+
 function finishTelegramLogin(req, res, payload, mode = "json") {
   const returnTo = sanitizeReturnPath(req.query.next || req.session.returnTo || "/");
   console.log("Telegram auth attempt", {
