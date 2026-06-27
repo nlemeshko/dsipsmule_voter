@@ -1951,7 +1951,7 @@ function getActiveParticipants(pollId) {
 }
 
 function getAllActiveParticipants() {
-  const rows = db
+  return db
     .prepare(`
       SELECT id, poll_id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type
       FROM participants
@@ -1960,23 +1960,6 @@ function getAllActiveParticipants() {
     `)
     .all()
     .map(decorateParticipant);
-
-  const uniqueParticipants = new Map();
-
-  rows.forEach((participant) => {
-    const dedupKey = [
-      String(participant.name || "").trim().toLowerCase(),
-      String(participant.image_url || "").trim(),
-    ].join("::");
-
-    if (!dedupKey || uniqueParticipants.has(dedupKey)) {
-      return;
-    }
-
-    uniqueParticipants.set(dedupKey, participant);
-  });
-
-  return Array.from(uniqueParticipants.values());
 }
 
 function getParticipantsByIds(ids, pollId) {
