@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Царь горы - <%= poll.title %></title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Amatic+SC:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="site-brand">
+        <nav class="site-brand-nav" aria-label="Основная навигация">
+          <a href="https://dsipsmule.one" target="_blank" rel="noreferrer">Главная</a>
+          <a href="/">Голосование</a>
+          <a href="/polls/<%= poll.slug %>">Этап</a>
+          <a href="/polls/<%= poll.slug %>/king-of-hill">Царь горы</a>
+        </nav>
+        <img
+          class="site-brand-logo"
+          src="https://dsipsmule.one/wp-content/uploads/2025/09/cropped-image-1.png"
+          alt="dsipsmule.one"
+          decoding="async"
+          fetchpriority="high"
+        />
+        <div class="site-brand-copy">
+          <span class="site-brand-domain">dsipsmule.one</span>
+          <strong>NASSAL2026</strong>
+          <span>Царь горы</span>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Отдельная турнирная игра</span>
+          <h1><%= poll.title %></h1>
+          <p>
+            Двум участницам случайно выпадает дуэль. Выбирайте сильнейшую, потом в следующий круг
+            проходят только победительницы, пока не останется одна.
+          </p>
+
+          <% if (telegramStatus) { %>
+            <div class="notice"><%= telegramStatus %></div>
+          <% } %>
+
+          <% if (tournamentStatus) { %>
+            <div class="notice"><%= tournamentStatus %></div>
+          <% } %>
+
+          <% if (currentUser) { %>
+            <div class="user-chip">
+              <% if (currentUser.photo_url) { %>
+                <img src="<%= currentUser.photo_url %>" alt="<%= currentUser.full_name %>" loading="lazy" decoding="async" />
+              <% } %>
+              <div>
+                <strong><%= currentUser.full_name %></strong>
+                <span><%= currentUser.username ? `@${currentUser.username}` : "без username" %></span>
+              </div>
+            </div>
+          <% } else if (telegramConfigured) { %>
+            <div class="widget-wrap">
+              <script
+                async
+                src="https://telegram.org/js/telegram-widget.js?23"
+                data-telegram-login="<%= telegramBotUsername %>"
+                data-size="large"
+                data-userpic="false"
+                data-auth-url="<%= telegramAuthUrl %>"
+              ></script>
+            </div>
+          <% } else { %>
+            <div class="notice">Telegram вход пока не настроен.</div>
+          <% } %>
+        </div>
+      </section>
+
+      <% if (currentUser && tournamentProgress && tournamentProgress.status === "active") { %>
+        <section class="panel king-panel">
+          <div class="king-panel-header">
+            <div>
+              <span class="eyebrow">Раунд <%= tournamentProgress.roundNumber %></span>
+              <h2>Матч <%= tournamentProgress.matchNumber %></h2>
+            </div>
+            <div class="poll-group-meta">
+              <span>Участниц: <%= tournamentProgress.totalParticipants %></span>
+              <span>Выборов сделано: <%= tournamentProgress.matchesPlayed %></span>
+              <span>Осталось в раунде: <%= tournamentProgress.remainingInRound %></span>
+            </div>
+          </div>
+
+          <div class="king-duel">
+            <% tournamentProgress.participants.forEach((participant, index) => { %>
+              <article class="king-card">
+                <div class="king-card-media">
+                  <% if (participant.image_url) { %>
+                    <img src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                  <% } else { %>
+                    <div class="king-avatar-fallback"><span><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span></div>
+                  <% } %>
+                </div>
+                <div class="king-card-copy">
+                  <strong><%= participant.name %></strong>
+                  <% if (participant.description) { %>
+                    <span><%= participant.description %></span>
+                  <% } %>
+                </div>
+                <form method="post" action="/polls/<%= poll.slug %>/king-of-hill/pick">
+                  <input type="hidden" name="run_id" value="<%= tournamentProgress.runId %>" />
+                  <input type="hidden" name="winner_id" value="<%= participant.id %>" />
+                  <button class="vote-button king-button" type="submit">Выбрать лучшую</button>
+                </form>
+              </article>
+              <% if (index === 0) { %>
+                <div class="versus king-versus">VS</div>
+              <% } %>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+
+      <% if (currentUser && tournamentProgress && tournamentProgress.status === "completed") { %>
+        <section class="panel king-panel">
+          <div class="king-finale">
+            <span class="eyebrow">Турнир завершен</span>
+            <h2>Победительница определена</h2>
+            <% if (tournamentProgress.champion) { %>
+              <div class="king-champion">
+                <% if (tournamentProgress.champion.image_url) { %>
+                  <img src="<%= tournamentProgress.champion.image_url %>" alt="<%= tournamentProgress.champion.name %>" loading="lazy" decoding="async" />
+                <% } %>
+                <strong><%= tournamentProgress.champion.name %></strong>
+              </div>
+            <% } %>
+            <form method="post" action="/polls/<%= poll.slug %>/king-of-hill/restart">
+              <button class="primary-button" type="submit">Сыграть заново</button>
+            </form>
+          </div>
+
+          <% if (stats) { %>
+            <div class="king-stats-grid">
+              <article class="panel king-stats-card">
+                <h3>Ваш результат</h3>
+                <div class="poll-group-meta">
+                  <span>Участниц: <%= stats.run.total_participants %></span>
+                  <span>Матчей: <%= stats.matches.length %></span>
+                  <span>Старт: <%= formatDate(stats.run.started_at) %></span>
+                </div>
+                <div class="king-stat-list">
+                  <% stats.participantStats.forEach((participant) => { %>
+                    <div class="king-stat-row">
+                      <div class="king-stat-user">
+                        <% if (participant.image_url) { %>
+                          <img src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                        <% } else { %>
+                          <span class="report-user-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                        <% } %>
+                        <strong><%= participant.name %></strong>
+                      </div>
+                      <span>Побед: <%= participant.wins %></span>
+                      <span>Поражений: <%= participant.losses %></span>
+                    </div>
+                  <% }) %>
+                </div>
+              </article>
+
+              <article class="panel king-stats-card">
+                <h3>Общие чемпионки</h3>
+                <% if (stats.aggregateChampions.length === 0) { %>
+                  <div class="notice">Пока нет завершенных турниров.</div>
+                <% } else { %>
+                  <div class="king-stat-list">
+                    <% stats.aggregateChampions.forEach((participant) => { %>
+                      <div class="king-stat-row">
+                        <div class="king-stat-user">
+                          <% if (participant.image_url) { %>
+                            <img src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                          <% } else { %>
+                            <span class="report-user-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                          <% } %>
+                          <strong><%= participant.name %></strong>
+                        </div>
+                        <span>Титулов: <%= participant.champion_count %></span>
+                      </div>
+                    <% }) %>
+                  </div>
+                <% } %>
+              </article>
+
+              <article class="panel king-stats-card king-stats-card-wide">
+                <h3>Самые частые победы в матчах</h3>
+                <% if (stats.aggregatePicks.length === 0) { %>
+                  <div class="notice">Пока нет данных по матчам.</div>
+                <% } else { %>
+                  <div class="king-stat-list">
+                    <% stats.aggregatePicks.forEach((participant) => { %>
+                      <div class="king-stat-row">
+                        <div class="king-stat-user">
+                          <% if (participant.image_url) { %>
+                            <img src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                          <% } else { %>
+                            <span class="report-user-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                          <% } %>
+                          <strong><%= participant.name %></strong>
+                        </div>
+                        <span>Побед: <%= participant.win_count %></span>
+                        <span>Появлений: <%= participant.appearance_count %></span>
+                      </div>
+                    <% }) %>
+                  </div>
+                <% } %>
+              </article>
+            </div>
+          <% } %>
+        </section>
+      <% } %>
+
+      <% if (currentUser && tournamentProgress && tournamentProgress.status === "not_enough_participants") { %>
+        <section class="panel">
+          <div class="notice">Для турнира нужно минимум две активные участницы.</div>
+        </section>
+      <% } %>
+
+      <footer class="site-footer">
+        <span>© 2026 Witcher by <a href="https://mdsn.work" target="_blank" rel="noreferrer">MDSN</a> | All Rights Reserved | Powered by <a href="https://t.me/kelahselai" target="_blank" rel="noreferrer">Nicky</a></span>
+      </footer>
+    </main>
+  </body>
+</html>

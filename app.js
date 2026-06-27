@@ -169,6 +169,43 @@ db.exec(`
     FOREIGN KEY (listener_user_id) REFERENCES telegram_users(id)
   );
 
+  CREATE TABLE IF NOT EXISTS king_of_hill_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    state_json TEXT,
+    total_participants INTEGER NOT NULL DEFAULT 0,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    champion_participant_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (poll_id) REFERENCES polls(id),
+    FOREIGN KEY (user_id) REFERENCES telegram_users(id),
+    FOREIGN KEY (champion_participant_id) REFERENCES participants(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS king_of_hill_matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL,
+    poll_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    round_number INTEGER NOT NULL,
+    match_number INTEGER NOT NULL,
+    left_participant_id INTEGER NOT NULL,
+    right_participant_id INTEGER NOT NULL,
+    winner_participant_id INTEGER NOT NULL,
+    loser_participant_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES king_of_hill_runs(id),
+    FOREIGN KEY (poll_id) REFERENCES polls(id),
+    FOREIGN KEY (user_id) REFERENCES telegram_users(id),
+    FOREIGN KEY (left_participant_id) REFERENCES participants(id),
+    FOREIGN KEY (right_participant_id) REFERENCES participants(id),
+    FOREIGN KEY (winner_participant_id) REFERENCES participants(id),
+    FOREIGN KEY (loser_participant_id) REFERENCES participants(id)
+  );
+
   CREATE TABLE IF NOT EXISTS sessions (
     sid TEXT PRIMARY KEY,
     sess TEXT NOT NULL,
@@ -1411,6 +1448,383 @@ function parseVotingState(rawState) {
   }
 }
 
+function createKingOfHillState(participantIds) {
+  return {
+    remainingIds: shuffleIds(participantIds),
+    nextRoundIds: [],
+    currentChoices: [],
+    roundNumber: 1,
+    matchNumber: 1,
+    totalParticipants: participantIds.length,
+    matchesPlayed: 0,
+  };
+}
+
+function parseKingOfHillState(rawState) {
+  if (!rawState) return null;
+  try {
+    return JSON.parse(rawState);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeKingOfHillState(state) {
+  return {
+    remainingIds: Array.isArray(state?.remainingIds) ? state.remainingIds.map(Number).filter(Number.isFinite) : [],
+    nextRoundIds: Array.isArray(state?.nextRoundIds) ? state.nextRoundIds.map(Number).filter(Number.isFinite) : [],
+    currentChoices: Array.isArray(state?.currentChoices) ? state.currentChoices.map(Number).filter(Number.isFinite) : [],
+    roundNumber: Math.max(1, Number(state?.roundNumber || 1)),
+    matchNumber: Math.max(1, Number(state?.matchNumber || 1)),
+    totalParticipants: Math.max(0, Number(state?.totalParticipants || 0)),
+    matchesPlayed: Math.max(0, Number(state?.matchesPlayed || 0)),
+  };
+}
+
+function advanceKingOfHillState(rawState) {
+  const state = normalizeKingOfHillState(rawState);
+  let championId = null;
+
+  while (championId === null && state.currentChoices.length < 2) {
+    if (state.remainingIds.length >= 2) {
+      state.currentChoices = [state.remainingIds.shift(), state.remainingIds.shift()];
+      break;
+    }
+
+    if (state.remainingIds.length === 1) {
+      state.nextRoundIds.push(state.remainingIds.shift());
+      continue;
+    }
+
+    if (state.nextRoundIds.length > 1) {
+      state.remainingIds = shuffleIds(state.nextRoundIds);
+      state.nextRoundIds = [];
+      state.currentChoices = [];
+      state.roundNumber += 1;
+      state.matchNumber = 1;
+      continue;
+    }
+
+    if (state.nextRoundIds.length === 1) {
+      championId = state.nextRoundIds[0];
+      state.currentChoices = [];
+      state.remainingIds = [];
+      break;
+    }
+
+    break;
+  }
+
+  return {
+    state,
+    championId,
+  };
+}
+
+function getLatestKingOfHillRun(userId, pollId) {
+  return db
+    .prepare(`
+      SELECT id, state_json, total_participants, started_at, completed_at, champion_participant_id
+      FROM king_of_hill_runs
+      WHERE user_id = ? AND poll_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+    `)
+    .get(userId, pollId);
+}
+
+function deleteKingOfHillRun(runId) {
+  db.prepare("DELETE FROM king_of_hill_matches WHERE run_id = ?").run(runId);
+  db.prepare("DELETE FROM king_of_hill_runs WHERE id = ?").run(runId);
+}
+
+function createKingOfHillRun(userId, pollId, participantIds) {
+  const timestamp = nowIso();
+  const state = advanceKingOfHillState(createKingOfHillState(participantIds));
+  const result = db.prepare(`
+    INSERT INTO king_of_hill_runs (
+      poll_id,
+      user_id,
+      state_json,
+      total_participants,
+      started_at,
+      completed_at,
+      champion_participant_id,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+  `).run(
+    pollId,
+    userId,
+    JSON.stringify(state.state),
+    participantIds.length,
+    timestamp,
+    timestamp,
+    timestamp,
+  );
+
+  return db
+    .prepare(`
+      SELECT id, state_json, total_participants, started_at, completed_at, champion_participant_id
+      FROM king_of_hill_runs
+      WHERE id = ?
+    `)
+    .get(Number(result.lastInsertRowid));
+}
+
+function getOrCreateKingOfHillRun(userId, pollId, participantIds) {
+  const latestRun = getLatestKingOfHillRun(userId, pollId);
+
+  if (!latestRun) {
+    return createKingOfHillRun(userId, pollId, participantIds);
+  }
+
+  if (!latestRun.completed_at) {
+    return latestRun;
+  }
+
+  return latestRun;
+}
+
+function getKingOfHillProgress(userId, pollId) {
+  const participants = getActiveParticipants(pollId);
+
+  if (participants.length < 2) {
+    return { status: "not_enough_participants" };
+  }
+
+  const participantIds = participants.map((participant) => participant.id);
+  const activeIdSet = new Set(participantIds);
+  let run = getOrCreateKingOfHillRun(userId, pollId, participantIds);
+  let state = parseKingOfHillState(run?.state_json);
+  let normalizedState = state ? normalizeKingOfHillState(state) : null;
+  const stateIds = normalizedState
+    ? [...normalizedState.remainingIds, ...normalizedState.nextRoundIds, ...normalizedState.currentChoices]
+    : [];
+  const stateIsUsable = normalizedState && stateIds.every((id) => activeIdSet.has(id));
+
+  if (!run || (!run.completed_at && !stateIsUsable)) {
+    if (run?.id && !run.completed_at) {
+      deleteKingOfHillRun(run.id);
+    }
+    run = createKingOfHillRun(userId, pollId, participantIds);
+    normalizedState = normalizeKingOfHillState(parseKingOfHillState(run.state_json));
+  }
+
+  if (run.completed_at) {
+    const champion = run.champion_participant_id
+      ? db.prepare("SELECT id, name, image_url FROM participants WHERE id = ?").get(run.champion_participant_id)
+      : null;
+
+    return {
+      status: "completed",
+      runId: run.id,
+      champion: champion ? { ...champion, image_url: buildParticipantImageUrl(champion.image_url) } : null,
+      totalParticipants: Number(run.total_participants || participants.length),
+    };
+  }
+
+  const advanced = advanceKingOfHillState(normalizedState);
+  db.prepare(`
+    UPDATE king_of_hill_runs
+    SET state_json = ?, updated_at = ?
+    WHERE id = ?
+  `).run(JSON.stringify(advanced.state), nowIso(), run.id);
+
+  if (advanced.championId) {
+    const completedAt = nowIso();
+    db.prepare(`
+      UPDATE king_of_hill_runs
+      SET state_json = ?, completed_at = ?, champion_participant_id = ?, updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(advanced.state), completedAt, advanced.championId, completedAt, run.id);
+
+    const champion = db.prepare("SELECT id, name, image_url FROM participants WHERE id = ?").get(advanced.championId);
+
+    return {
+      status: "completed",
+      runId: run.id,
+      champion: champion ? { ...champion, image_url: buildParticipantImageUrl(champion.image_url) } : null,
+      totalParticipants: Number(run.total_participants || participants.length),
+    };
+  }
+
+  return {
+    status: "active",
+    runId: run.id,
+    roundNumber: advanced.state.roundNumber,
+    matchNumber: advanced.state.matchNumber,
+    totalParticipants: advanced.state.totalParticipants,
+    matchesPlayed: advanced.state.matchesPlayed,
+    remainingInRound: advanced.state.remainingIds.length + advanced.state.currentChoices.length,
+    participants: getParticipantsByIds(advanced.state.currentChoices, pollId),
+  };
+}
+
+function getKingOfHillStats(pollId, userId, runId) {
+  const targetRun = runId
+    ? db
+        .prepare(`
+          SELECT id, total_participants, started_at, completed_at, champion_participant_id
+          FROM king_of_hill_runs
+          WHERE id = ? AND poll_id = ? AND user_id = ?
+        `)
+        .get(runId, pollId, userId)
+    : db
+        .prepare(`
+          SELECT id, total_participants, started_at, completed_at, champion_participant_id
+          FROM king_of_hill_runs
+          WHERE poll_id = ? AND user_id = ? AND completed_at IS NOT NULL
+          ORDER BY id DESC
+          LIMIT 1
+        `)
+        .get(pollId, userId);
+
+  if (!targetRun) {
+    return null;
+  }
+
+  const runMatches = db
+    .prepare(`
+      SELECT
+        khm.round_number,
+        khm.match_number,
+        khm.left_participant_id,
+        khm.right_participant_id,
+        khm.winner_participant_id,
+        khm.loser_participant_id,
+        khm.created_at,
+        left_p.name AS left_name,
+        left_p.image_url AS left_image_url,
+        right_p.name AS right_name,
+        right_p.image_url AS right_image_url,
+        winner_p.name AS winner_name,
+        winner_p.image_url AS winner_image_url,
+        loser_p.name AS loser_name
+      FROM king_of_hill_matches khm
+      JOIN participants left_p ON left_p.id = khm.left_participant_id
+      JOIN participants right_p ON right_p.id = khm.right_participant_id
+      JOIN participants winner_p ON winner_p.id = khm.winner_participant_id
+      JOIN participants loser_p ON loser_p.id = khm.loser_participant_id
+      WHERE khm.run_id = ?
+      ORDER BY khm.round_number ASC, khm.match_number ASC, khm.id ASC
+    `)
+    .all(targetRun.id)
+    .map((match) => ({
+      ...match,
+      left_image_url: buildParticipantImageUrl(match.left_image_url),
+      right_image_url: buildParticipantImageUrl(match.right_image_url),
+      winner_image_url: buildParticipantImageUrl(match.winner_image_url),
+    }));
+
+  const runParticipantMap = new Map();
+  runMatches.forEach((match) => {
+    [match.left_participant_id, match.right_participant_id].forEach((participantId, index) => {
+      if (runParticipantMap.has(participantId)) {
+        return;
+      }
+
+      runParticipantMap.set(participantId, {
+        id: participantId,
+        name: index === 0 ? match.left_name : match.right_name,
+        image_url: index === 0 ? match.left_image_url : match.right_image_url,
+        wins: 0,
+        losses: 0,
+        roundsReached: 1,
+      });
+    });
+  });
+
+  runMatches.forEach((match) => {
+    const winner = runParticipantMap.get(match.winner_participant_id);
+    const loser = runParticipantMap.get(match.loser_participant_id);
+
+    if (winner) {
+      winner.wins += 1;
+      winner.roundsReached = Math.max(winner.roundsReached, match.round_number + 1);
+    }
+
+    if (loser) {
+      loser.losses += 1;
+      loser.roundsReached = Math.max(loser.roundsReached, match.round_number);
+    }
+  });
+
+  const champion = targetRun.champion_participant_id
+    ? db.prepare("SELECT id, name, image_url FROM participants WHERE id = ?").get(targetRun.champion_participant_id)
+    : null;
+  const aggregateChampions = db
+    .prepare(`
+      SELECT
+        p.id,
+        p.name,
+        p.image_url,
+        COUNT(*) AS champion_count
+      FROM king_of_hill_runs khr
+      JOIN participants p ON p.id = khr.champion_participant_id
+      WHERE khr.poll_id = ?
+        AND khr.completed_at IS NOT NULL
+      GROUP BY p.id, p.name, p.image_url
+      ORDER BY champion_count DESC, p.name ASC
+      LIMIT 10
+    `)
+    .all(pollId)
+    .map((row) => ({
+      ...row,
+      image_url: buildParticipantImageUrl(row.image_url),
+      champion_count: Number(row.champion_count || 0),
+    }));
+  const aggregatePicks = db
+    .prepare(`
+      SELECT
+        p.id,
+        p.name,
+        p.image_url,
+        SUM(CASE WHEN khm.winner_participant_id = p.id THEN 1 ELSE 0 END) AS win_count,
+        SUM(CASE WHEN khm.loser_participant_id = p.id THEN 1 ELSE 0 END) AS loss_count,
+        SUM(
+          CASE
+            WHEN khm.winner_participant_id = p.id OR khm.loser_participant_id = p.id THEN 1
+            ELSE 0
+          END
+        ) AS appearance_count
+      FROM king_of_hill_matches khm
+      JOIN participants p
+        ON p.id = khm.winner_participant_id
+        OR p.id = khm.loser_participant_id
+      JOIN king_of_hill_runs khr ON khr.id = khm.run_id
+      WHERE khm.poll_id = ?
+        AND khr.completed_at IS NOT NULL
+      GROUP BY p.id, p.name, p.image_url
+      ORDER BY win_count DESC, appearance_count DESC, p.name ASC
+      LIMIT 10
+    `)
+    .all(pollId)
+    .map((row) => ({
+      ...row,
+      image_url: buildParticipantImageUrl(row.image_url),
+      win_count: Number(row.win_count || 0),
+      loss_count: Number(row.loss_count || 0),
+      appearance_count: Number(row.appearance_count || 0),
+    }));
+
+  return {
+    run: {
+      ...targetRun,
+      total_participants: Number(targetRun.total_participants || 0),
+    },
+    champion: champion ? { ...champion, image_url: buildParticipantImageUrl(champion.image_url) } : null,
+    matches: runMatches,
+    participantStats: Array.from(runParticipantMap.values()).sort((left, right) => {
+      if (right.wins !== left.wins) return right.wins - left.wins;
+      if (left.losses !== right.losses) return left.losses - right.losses;
+      return left.name.localeCompare(right.name, "ru");
+    }),
+    aggregateChampions,
+    aggregatePicks,
+  };
+}
+
 function getPolls() {
   return db
     .prepare(`
@@ -2245,6 +2659,48 @@ app.get("/polls/:slug", (req, res) => {
   });
 });
 
+app.get("/polls/:slug/king-of-hill", (req, res) => {
+  req.session.returnTo = `/polls/${req.params.slug}/king-of-hill`;
+  const poll = getPollBySlug(req.params.slug);
+  if (!poll || !poll.is_active || (!poll.is_visible && !req.session.isAdmin)) {
+    return res.status(404).render("error", {
+      title: "Турнир не найден",
+      message: "Проверьте ссылку на страницу турнира.",
+    });
+  }
+
+  const tournamentProgress = req.session.user
+    ? getKingOfHillProgress(req.session.user.id, poll.id)
+    : null;
+  const stats = tournamentProgress?.status === "completed"
+    ? getKingOfHillStats(poll.id, req.session.user.id, tournamentProgress.runId)
+    : null;
+  const telegramStatus =
+    req.query.tg_login === "success"
+      ? "Вход через Telegram выполнен."
+      : req.query.tg_error === "verify_failed"
+        ? "Telegram логин не прошел проверку подписи."
+        : req.query.tg_error === "config"
+          ? "Telegram не настроен на сервере."
+          : null;
+  const tournamentStatus =
+    req.query.koh_error === "stale_choice"
+      ? "Этот матч уже обновился. Мы показали актуальную пару."
+      : null;
+
+  res.render("king-of-hill", {
+    poll,
+    tournamentProgress,
+    stats,
+    formatDate,
+    telegramStatus,
+    tournamentStatus,
+    telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
+    telegramBotUsername: TELEGRAM_BOT_USERNAME,
+    telegramAuthUrl: buildTelegramAuthUrl(`/polls/${poll.slug}/king-of-hill`),
+  });
+});
+
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
@@ -2515,6 +2971,132 @@ app.post("/bets", ensureUser, async (req, res) => {
   );
 
   res.redirect("/?bet=burmalda#bet-panel-burmalda");
+});
+
+app.post("/polls/:slug/king-of-hill/restart", ensureUser, (req, res) => {
+  const poll = getPollBySlug(req.params.slug);
+
+  if (!poll) {
+    return res.status(404).render("error", {
+      title: "Турнир не найден",
+      message: "Проверьте ссылку на страницу турнира.",
+    });
+  }
+
+  const participants = getActiveParticipants(poll.id);
+  if (participants.length < 2) {
+    return res.status(400).render("error", {
+      title: "Недостаточно участниц",
+      message: "Для турнира нужно минимум две активные участницы.",
+    });
+  }
+
+  const latestRun = getLatestKingOfHillRun(req.session.user.id, poll.id);
+  if (latestRun && !latestRun.completed_at) {
+    deleteKingOfHillRun(latestRun.id);
+  }
+
+  createKingOfHillRun(req.session.user.id, poll.id, participants.map((participant) => participant.id));
+  res.redirect(`/polls/${poll.slug}/king-of-hill`);
+});
+
+app.post("/polls/:slug/king-of-hill/pick", ensureUser, (req, res) => {
+  const poll = getPollBySlug(req.params.slug);
+  const winnerId = Number(req.body.winner_id);
+  const runId = Number(req.body.run_id);
+
+  if (!poll) {
+    return res.status(404).render("error", {
+      title: "Турнир не найден",
+      message: "Проверьте ссылку на страницу турнира.",
+    });
+  }
+
+  const progress = getKingOfHillProgress(req.session.user.id, poll.id);
+
+  if (progress.status === "completed") {
+    return res.redirect(`/polls/${poll.slug}/king-of-hill`);
+  }
+
+  if (progress.status !== "active" || progress.runId !== runId) {
+    return res.redirect(`/polls/${poll.slug}/king-of-hill?koh_error=stale_choice`);
+  }
+
+  const choiceIds = progress.participants.map((participant) => participant.id);
+  if (!choiceIds.includes(winnerId)) {
+    return res.redirect(`/polls/${poll.slug}/king-of-hill?koh_error=stale_choice`);
+  }
+
+  const run = db
+    .prepare(`
+      SELECT id, state_json, completed_at
+      FROM king_of_hill_runs
+      WHERE id = ? AND poll_id = ? AND user_id = ?
+    `)
+    .get(runId, poll.id, req.session.user.id);
+
+  if (!run || run.completed_at) {
+    return res.redirect(`/polls/${poll.slug}/king-of-hill?koh_error=stale_choice`);
+  }
+
+  const state = advanceKingOfHillState(parseKingOfHillState(run.state_json) || createKingOfHillState([])).state;
+  const normalizedChoices = [...state.currentChoices].sort((left, right) => left - right);
+  const requestChoices = [...choiceIds].sort((left, right) => left - right);
+
+  if (JSON.stringify(normalizedChoices) !== JSON.stringify(requestChoices)) {
+    return res.redirect(`/polls/${poll.slug}/king-of-hill?koh_error=stale_choice`);
+  }
+
+  const loserId = choiceIds.find((id) => id !== winnerId);
+  const timestamp = nowIso();
+  db.prepare(`
+    INSERT INTO king_of_hill_matches (
+      run_id,
+      poll_id,
+      user_id,
+      round_number,
+      match_number,
+      left_participant_id,
+      right_participant_id,
+      winner_participant_id,
+      loser_participant_id,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    runId,
+    poll.id,
+    req.session.user.id,
+    state.roundNumber,
+    state.matchNumber,
+    state.currentChoices[0],
+    state.currentChoices[1],
+    winnerId,
+    loserId,
+    timestamp,
+  );
+
+  state.currentChoices = [];
+  state.nextRoundIds.push(winnerId);
+  state.matchNumber += 1;
+  state.matchesPlayed += 1;
+
+  const advanced = advanceKingOfHillState(state);
+
+  if (advanced.championId) {
+    db.prepare(`
+      UPDATE king_of_hill_runs
+      SET state_json = ?, completed_at = ?, champion_participant_id = ?, updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(advanced.state), timestamp, advanced.championId, timestamp, runId);
+  } else {
+    db.prepare(`
+      UPDATE king_of_hill_runs
+      SET state_json = ?, updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(advanced.state), timestamp, runId);
+  }
+
+  res.redirect(`/polls/${poll.slug}/king-of-hill`);
 });
 
 app.post("/vote", ensureUser, (req, res) => {
