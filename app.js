@@ -1653,8 +1653,9 @@ function getKingOfHillProgress(userId) {
     ? [...normalizedState.remainingIds, ...normalizedState.nextRoundIds, ...normalizedState.currentChoices]
     : [];
   const stateIsUsable = normalizedState && stateIds.every((id) => activeIdSet.has(id));
+  const runSizeMatchesCurrentParticipants = Number(run?.total_participants || 0) === participantIds.length;
 
-  if (!run || (!run.completed_at && !stateIsUsable)) {
+  if (!run || (!run.completed_at && (!stateIsUsable || !runSizeMatchesCurrentParticipants))) {
     if (run?.id && !run.completed_at) {
       deleteKingOfHillRun(run.id);
     }
@@ -1951,7 +1952,7 @@ function getActiveParticipants(pollId) {
 }
 
 function getAllActiveParticipants() {
-  return db
+  const rows = db
     .prepare(`
       SELECT id, poll_id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type
       FROM participants
@@ -1960,6 +1961,28 @@ function getAllActiveParticipants() {
     `)
     .all()
     .map(decorateParticipant);
+
+  const uniqueParticipants = new Map();
+
+  rows.forEach((participant) => {
+    const dedupKey = String(participant.name || "").trim().toLowerCase();
+
+    if (!dedupKey) {
+      return;
+    }
+
+    const existing = uniqueParticipants.get(dedupKey);
+    if (!existing) {
+      uniqueParticipants.set(dedupKey, participant);
+      return;
+    }
+
+    if (!existing.image_url && participant.image_url) {
+      uniqueParticipants.set(dedupKey, participant);
+    }
+  });
+
+  return Array.from(uniqueParticipants.values());
 }
 
 function getParticipantsByIds(ids, pollId) {
