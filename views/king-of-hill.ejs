@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Царь горы - Все участницы</title>
+    <title>Царь горы - Все участники</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -37,10 +37,10 @@
       <section class="hero">
         <div class="hero-copy">
           <span class="eyebrow">Отдельная турнирная игра</span>
-          <h1>Все участницы</h1>
+          <h1>Все участники</h1>
           <p>
-            Двум участницам случайно выпадает дуэль. Выбирайте сильнейшую, потом в следующий круг
-            проходят только победительницы, пока не останется одна.
+            Двум участникам случайно выпадает дуэль. Выбирайте лучшего, потом в следующий круг
+            проходят только победители, пока не останется один.
           </p>
 
           <% if (telegramStatus) { %>
@@ -86,7 +86,7 @@
               <h2>Матч <%= tournamentProgress.matchNumber %></h2>
             </div>
             <div class="poll-group-meta">
-              <span>Участниц: <%= tournamentProgress.totalParticipants %></span>
+              <span>Участников: <%= tournamentProgress.totalParticipants %></span>
               <span>Выборов сделано: <%= tournamentProgress.matchesPlayed %></span>
               <span>Осталось в раунде: <%= tournamentProgress.remainingInRound %></span>
             </div>
@@ -104,9 +104,6 @@
                 </div>
                 <div class="king-card-copy">
                   <strong><%= participant.name %></strong>
-                  <% if (participant.description) { %>
-                    <span><%= participant.description %></span>
-                  <% } %>
                 </div>
                 <form method="post" action="/king-of-hill/pick">
                   <input type="hidden" name="run_id" value="<%= tournamentProgress.runId %>" />
@@ -126,7 +123,7 @@
         <section class="panel king-panel">
           <div class="king-finale">
             <span class="eyebrow">Турнир завершен</span>
-            <h2>Победительница определена</h2>
+            <h2>Победитель определен</h2>
             <% if (tournamentProgress.champion) { %>
               <div class="king-champion">
                 <% if (tournamentProgress.champion.image_url) { %>
@@ -145,7 +142,7 @@
               <article class="panel king-stats-card">
                 <h3>Ваш результат</h3>
                 <div class="poll-group-meta">
-                  <span>Участниц: <%= stats.run.total_participants %></span>
+                  <span>Участников: <%= stats.run.total_participants %></span>
                   <span>Матчей: <%= stats.matches.length %></span>
                   <span>Старт: <%= formatDate(stats.run.started_at) %></span>
                 </div>
@@ -168,7 +165,7 @@
               </article>
 
               <article class="panel king-stats-card">
-                <h3>Общие чемпионки</h3>
+                <h3>Общие победители</h3>
                 <% if (stats.aggregateChampions.length === 0) { %>
                   <div class="notice">Пока нет завершенных турниров.</div>
                 <% } else { %>
@@ -220,7 +217,7 @@
 
       <% if (currentUser && tournamentProgress && tournamentProgress.status === "not_enough_participants") { %>
         <section class="panel">
-          <div class="notice">Для турнира нужно минимум две активные участницы.</div>
+          <div class="notice">Для турнира нужно минимум два активных участника.</div>
         </section>
       <% } %>
 
