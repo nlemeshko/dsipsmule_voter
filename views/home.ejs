@@ -18,7 +18,7 @@
         <nav class="site-brand-nav" aria-label="Основная навигация">
           <a href="https://dsipsmule.one" target="_blank" rel="noreferrer">Главная</a>
           <a href="/">Голосование</a>
-          <a href="/polls/<%= poll.slug %>/king-of-hill">Царь горы</a>
+          <a href="/king-of-hill">Царь горы</a>
           <a href="/polls/<%= poll.slug %>/report">Отчет</a>
         </nav>
         <img
@@ -41,7 +41,7 @@
           <p>
             <%= poll.description || "Выберите сильнейшего участника в этом этапе." %>
           </p>
-          <a class="ghost-button" href="/polls/<%= poll.slug %>/king-of-hill">Открыть режим «Царь горы»</a>
+          <a class="ghost-button" href="/king-of-hill">Открыть режим «Царь горы»</a>
 
           <% if (telegramStatus) { %>
             <div class="notice"><%= telegramStatus %></div>

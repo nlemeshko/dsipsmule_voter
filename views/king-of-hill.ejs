@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Царь горы - <%= poll.title %></title>
+    <title>Царь горы - Все участницы</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -18,8 +18,7 @@
         <nav class="site-brand-nav" aria-label="Основная навигация">
           <a href="https://dsipsmule.one" target="_blank" rel="noreferrer">Главная</a>
           <a href="/">Голосование</a>
-          <a href="/polls/<%= poll.slug %>">Этап</a>
-          <a href="/polls/<%= poll.slug %>/king-of-hill">Царь горы</a>
+          <a href="/king-of-hill">Царь горы</a>
         </nav>
         <img
           class="site-brand-logo"
@@ -38,7 +37,7 @@
       <section class="hero">
         <div class="hero-copy">
           <span class="eyebrow">Отдельная турнирная игра</span>
-          <h1><%= poll.title %></h1>
+          <h1>Все участницы</h1>
           <p>
             Двум участницам случайно выпадает дуэль. Выбирайте сильнейшую, потом в следующий круг
             проходят только победительницы, пока не останется одна.
@@ -109,7 +108,7 @@
                     <span><%= participant.description %></span>
                   <% } %>
                 </div>
-                <form method="post" action="/polls/<%= poll.slug %>/king-of-hill/pick">
+                <form method="post" action="/king-of-hill/pick">
                   <input type="hidden" name="run_id" value="<%= tournamentProgress.runId %>" />
                   <input type="hidden" name="winner_id" value="<%= participant.id %>" />
                   <button class="vote-button king-button" type="submit">Выбрать лучшую</button>
@@ -136,7 +135,7 @@
                 <strong><%= tournamentProgress.champion.name %></strong>
               </div>
             <% } %>
-            <form method="post" action="/polls/<%= poll.slug %>/king-of-hill/restart">
+            <form method="post" action="/king-of-hill/restart">
               <button class="primary-button" type="submit">Сыграть заново</button>
             </form>
           </div>

@@ -424,6 +424,28 @@ function ensureDefaultPoll() {
 
 const defaultPollId = ensureDefaultPoll();
 
+function ensureKingOfHillScopePoll() {
+  const existing = db.prepare("SELECT id FROM polls WHERE slug = ? LIMIT 1").get("king-of-hill-global");
+  if (existing) return existing.id;
+
+  const timestamp = nowIso();
+  const result = db.prepare(`
+    INSERT INTO polls (title, slug, description, redirect_url, is_visible, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 0, 0, ?, ?)
+  `).run(
+    "Царь горы",
+    "king-of-hill-global",
+    "Служебная область для отдельной игры Царь горы.",
+    "https://dsipsmule.one",
+    timestamp,
+    timestamp,
+  );
+
+  return Number(result.lastInsertRowid);
+}
+
+const kingOfHillScopePollId = ensureKingOfHillScopePoll();
+
 db.prepare("UPDATE participants SET poll_id = ? WHERE poll_id IS NULL").run(defaultPollId);
 db.prepare("UPDATE votes SET poll_id = ? WHERE poll_id IS NULL").run(defaultPollId);
 
@@ -1586,8 +1608,8 @@ function getOrCreateKingOfHillRun(userId, pollId, participantIds) {
   return latestRun;
 }
 
-function getKingOfHillProgress(userId, pollId) {
-  const participants = getActiveParticipants(pollId);
+function getKingOfHillProgress(userId) {
+  const participants = getAllActiveParticipants();
 
   if (participants.length < 2) {
     return { status: "not_enough_participants" };
@@ -1595,7 +1617,7 @@ function getKingOfHillProgress(userId, pollId) {
 
   const participantIds = participants.map((participant) => participant.id);
   const activeIdSet = new Set(participantIds);
-  let run = getOrCreateKingOfHillRun(userId, pollId, participantIds);
+  let run = getOrCreateKingOfHillRun(userId, kingOfHillScopePollId, participantIds);
   let state = parseKingOfHillState(run?.state_json);
   let normalizedState = state ? normalizeKingOfHillState(state) : null;
   const stateIds = normalizedState
@@ -1607,7 +1629,7 @@ function getKingOfHillProgress(userId, pollId) {
     if (run?.id && !run.completed_at) {
       deleteKingOfHillRun(run.id);
     }
-    run = createKingOfHillRun(userId, pollId, participantIds);
+    run = createKingOfHillRun(userId, kingOfHillScopePollId, participantIds);
     normalizedState = normalizeKingOfHillState(parseKingOfHillState(run.state_json));
   }
 
@@ -1657,7 +1679,7 @@ function getKingOfHillProgress(userId, pollId) {
     totalParticipants: advanced.state.totalParticipants,
     matchesPlayed: advanced.state.matchesPlayed,
     remainingInRound: advanced.state.remainingIds.length + advanced.state.currentChoices.length,
-    participants: getParticipantsByIds(advanced.state.currentChoices, pollId),
+    participants: getParticipantsByIdsGlobal(advanced.state.currentChoices),
   };
 }
 
@@ -1862,6 +1884,18 @@ function getActiveParticipants(pollId) {
     .map(decorateParticipant);
 }
 
+function getAllActiveParticipants() {
+  return db
+    .prepare(`
+      SELECT id, poll_id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type
+      FROM participants
+      WHERE is_active = 1
+      ORDER BY created_at ASC, id ASC
+    `)
+    .all()
+    .map(decorateParticipant);
+}
+
 function getParticipantsByIds(ids, pollId) {
   if (!ids.length) return [];
   const placeholders = ids.map(() => "?").join(", ");
@@ -1870,6 +1904,19 @@ function getParticipantsByIds(ids, pollId) {
       `SELECT id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type FROM participants WHERE poll_id = ? AND id IN (${placeholders})`,
     )
     .all(pollId, ...ids);
+
+  const byId = new Map(rows.map((row) => [row.id, decorateParticipant(row)]));
+  return ids.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function getParticipantsByIdsGlobal(ids) {
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `SELECT id, poll_id, name, description, image_url, song_image_url, lyrics_text, embed_html, audio_file_path, audio_source_url, audio_source_type FROM participants WHERE is_active = 1 AND id IN (${placeholders})`,
+    )
+    .all(...ids);
 
   const byId = new Map(rows.map((row) => [row.id, decorateParticipant(row)]));
   return ids.map((id) => byId.get(id)).filter(Boolean);
@@ -2660,20 +2707,16 @@ app.get("/polls/:slug", (req, res) => {
 });
 
 app.get("/polls/:slug/king-of-hill", (req, res) => {
-  req.session.returnTo = `/polls/${req.params.slug}/king-of-hill`;
-  const poll = getPollBySlug(req.params.slug);
-  if (!poll || !poll.is_active || (!poll.is_visible && !req.session.isAdmin)) {
-    return res.status(404).render("error", {
-      title: "Турнир не найден",
-      message: "Проверьте ссылку на страницу турнира.",
-    });
-  }
+  res.redirect("/king-of-hill");
+});
 
+app.get("/king-of-hill", (req, res) => {
+  req.session.returnTo = "/king-of-hill";
   const tournamentProgress = req.session.user
-    ? getKingOfHillProgress(req.session.user.id, poll.id)
+    ? getKingOfHillProgress(req.session.user.id)
     : null;
   const stats = tournamentProgress?.status === "completed"
-    ? getKingOfHillStats(poll.id, req.session.user.id, tournamentProgress.runId)
+    ? getKingOfHillStats(kingOfHillScopePollId, req.session.user.id, tournamentProgress.runId)
     : null;
   const telegramStatus =
     req.query.tg_login === "success"
@@ -2689,7 +2732,6 @@ app.get("/polls/:slug/king-of-hill", (req, res) => {
       : null;
 
   res.render("king-of-hill", {
-    poll,
     tournamentProgress,
     stats,
     formatDate,
@@ -2697,7 +2739,7 @@ app.get("/polls/:slug/king-of-hill", (req, res) => {
     tournamentStatus,
     telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
-    telegramAuthUrl: buildTelegramAuthUrl(`/polls/${poll.slug}/king-of-hill`),
+    telegramAuthUrl: buildTelegramAuthUrl("/king-of-hill"),
   });
 });
 
@@ -2973,17 +3015,8 @@ app.post("/bets", ensureUser, async (req, res) => {
   res.redirect("/?bet=burmalda#bet-panel-burmalda");
 });
 
-app.post("/polls/:slug/king-of-hill/restart", ensureUser, (req, res) => {
-  const poll = getPollBySlug(req.params.slug);
-
-  if (!poll) {
-    return res.status(404).render("error", {
-      title: "Турнир не найден",
-      message: "Проверьте ссылку на страницу турнира.",
-    });
-  }
-
-  const participants = getActiveParticipants(poll.id);
+app.post("/king-of-hill/restart", ensureUser, (req, res) => {
+  const participants = getAllActiveParticipants();
   if (participants.length < 2) {
     return res.status(400).render("error", {
       title: "Недостаточно участниц",
@@ -2991,40 +3024,31 @@ app.post("/polls/:slug/king-of-hill/restart", ensureUser, (req, res) => {
     });
   }
 
-  const latestRun = getLatestKingOfHillRun(req.session.user.id, poll.id);
+  const latestRun = getLatestKingOfHillRun(req.session.user.id, kingOfHillScopePollId);
   if (latestRun && !latestRun.completed_at) {
     deleteKingOfHillRun(latestRun.id);
   }
 
-  createKingOfHillRun(req.session.user.id, poll.id, participants.map((participant) => participant.id));
-  res.redirect(`/polls/${poll.slug}/king-of-hill`);
+  createKingOfHillRun(req.session.user.id, kingOfHillScopePollId, participants.map((participant) => participant.id));
+  res.redirect("/king-of-hill");
 });
 
-app.post("/polls/:slug/king-of-hill/pick", ensureUser, (req, res) => {
-  const poll = getPollBySlug(req.params.slug);
+app.post("/king-of-hill/pick", ensureUser, (req, res) => {
   const winnerId = Number(req.body.winner_id);
   const runId = Number(req.body.run_id);
-
-  if (!poll) {
-    return res.status(404).render("error", {
-      title: "Турнир не найден",
-      message: "Проверьте ссылку на страницу турнира.",
-    });
-  }
-
-  const progress = getKingOfHillProgress(req.session.user.id, poll.id);
+  const progress = getKingOfHillProgress(req.session.user.id);
 
   if (progress.status === "completed") {
-    return res.redirect(`/polls/${poll.slug}/king-of-hill`);
+    return res.redirect("/king-of-hill");
   }
 
   if (progress.status !== "active" || progress.runId !== runId) {
-    return res.redirect(`/polls/${poll.slug}/king-of-hill?koh_error=stale_choice`);
+    return res.redirect("/king-of-hill?koh_error=stale_choice");
   }
 
   const choiceIds = progress.participants.map((participant) => participant.id);
   if (!choiceIds.includes(winnerId)) {
-    return res.redirect(`/polls/${poll.slug}/king-of-hill?koh_error=stale_choice`);
+    return res.redirect("/king-of-hill?koh_error=stale_choice");
   }
 
   const run = db
@@ -3033,10 +3057,10 @@ app.post("/polls/:slug/king-of-hill/pick", ensureUser, (req, res) => {
       FROM king_of_hill_runs
       WHERE id = ? AND poll_id = ? AND user_id = ?
     `)
-    .get(runId, poll.id, req.session.user.id);
+    .get(runId, kingOfHillScopePollId, req.session.user.id);
 
   if (!run || run.completed_at) {
-    return res.redirect(`/polls/${poll.slug}/king-of-hill?koh_error=stale_choice`);
+    return res.redirect("/king-of-hill?koh_error=stale_choice");
   }
 
   const state = advanceKingOfHillState(parseKingOfHillState(run.state_json) || createKingOfHillState([])).state;
@@ -3044,7 +3068,7 @@ app.post("/polls/:slug/king-of-hill/pick", ensureUser, (req, res) => {
   const requestChoices = [...choiceIds].sort((left, right) => left - right);
 
   if (JSON.stringify(normalizedChoices) !== JSON.stringify(requestChoices)) {
-    return res.redirect(`/polls/${poll.slug}/king-of-hill?koh_error=stale_choice`);
+    return res.redirect("/king-of-hill?koh_error=stale_choice");
   }
 
   const loserId = choiceIds.find((id) => id !== winnerId);
@@ -3064,7 +3088,7 @@ app.post("/polls/:slug/king-of-hill/pick", ensureUser, (req, res) => {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     runId,
-    poll.id,
+    kingOfHillScopePollId,
     req.session.user.id,
     state.roundNumber,
     state.matchNumber,
@@ -3096,7 +3120,7 @@ app.post("/polls/:slug/king-of-hill/pick", ensureUser, (req, res) => {
     `).run(JSON.stringify(advanced.state), timestamp, runId);
   }
 
-  res.redirect(`/polls/${poll.slug}/king-of-hill`);
+  res.redirect("/king-of-hill");
 });
 
 app.post("/vote", ensureUser, (req, res) => {
