@@ -274,6 +274,10 @@ textarea {
   align-items: center;
 }
 
+.king-duel-triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .king-card {
   display: grid;
   gap: 18px;

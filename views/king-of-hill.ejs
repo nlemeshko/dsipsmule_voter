@@ -83,7 +83,7 @@
           <div class="king-panel-header">
             <div>
               <span class="eyebrow">Раунд <%= tournamentProgress.roundNumber %></span>
-              <h2>Матч <%= tournamentProgress.matchNumber %></h2>
+              <h2><%= tournamentProgress.stageType === "triple" ? "Финальный выбор из 3" : `Матч ${tournamentProgress.matchNumber}` %></h2>
             </div>
             <div class="poll-group-meta">
               <span>Участников: <%= tournamentProgress.totalParticipants %></span>
@@ -92,7 +92,7 @@
             </div>
           </div>
 
-          <div class="king-duel">
+          <div class="king-duel <%= tournamentProgress.stageType === 'triple' ? 'king-duel-triple' : '' %>">
             <% tournamentProgress.participants.forEach((participant, index) => { %>
               <article class="king-card">
                 <div class="king-card-media">
@@ -108,10 +108,10 @@
                 <form method="post" action="/king-of-hill/pick">
                   <input type="hidden" name="run_id" value="<%= tournamentProgress.runId %>" />
                   <input type="hidden" name="winner_id" value="<%= participant.id %>" />
-                  <button class="vote-button king-button" type="submit">Выбрать лучшую</button>
+                  <button class="vote-button king-button" type="submit">Выбрать</button>
                 </form>
               </article>
-              <% if (index === 0) { %>
+              <% if (tournamentProgress.stageType !== "triple" && index === 0) { %>
                 <div class="versus king-versus">VS</div>
               <% } %>
             <% }) %>

@@ -194,14 +194,17 @@ db.exec(`
     match_number INTEGER NOT NULL,
     left_participant_id INTEGER NOT NULL,
     right_participant_id INTEGER NOT NULL,
+    third_participant_id INTEGER,
     winner_participant_id INTEGER NOT NULL,
     loser_participant_id INTEGER NOT NULL,
+    loser_participant_ids_json TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (run_id) REFERENCES king_of_hill_runs(id),
     FOREIGN KEY (poll_id) REFERENCES polls(id),
     FOREIGN KEY (user_id) REFERENCES telegram_users(id),
     FOREIGN KEY (left_participant_id) REFERENCES participants(id),
     FOREIGN KEY (right_participant_id) REFERENCES participants(id),
+    FOREIGN KEY (third_participant_id) REFERENCES participants(id),
     FOREIGN KEY (winner_participant_id) REFERENCES participants(id),
     FOREIGN KEY (loser_participant_id) REFERENCES participants(id)
   );
@@ -320,6 +323,11 @@ const stageBetColumns = db
   .all()
   .map((column) => column.name);
 
+const kingOfHillMatchColumns = db
+  .prepare("PRAGMA table_info(king_of_hill_matches)")
+  .all()
+  .map((column) => column.name);
+
 if (!pollColumns.includes("is_visible")) {
   db.exec("ALTER TABLE polls ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1");
 }
@@ -391,6 +399,14 @@ if (!stageBetColumns.includes("participant_name")) {
 
 if (!stageBetColumns.includes("participant_avatar_url")) {
   db.exec("ALTER TABLE stage_bets ADD COLUMN participant_avatar_url TEXT");
+}
+
+if (!kingOfHillMatchColumns.includes("third_participant_id")) {
+  db.exec("ALTER TABLE king_of_hill_matches ADD COLUMN third_participant_id INTEGER");
+}
+
+if (!kingOfHillMatchColumns.includes("loser_participant_ids_json")) {
+  db.exec("ALTER TABLE king_of_hill_matches ADD COLUMN loser_participant_ids_json TEXT");
 }
 
 function slugify(value) {
@@ -1503,11 +1519,24 @@ function normalizeKingOfHillState(state) {
   };
 }
 
+function isKingOfHillTripleChoice(state) {
+  return state.remainingIds.length === 3 && state.nextRoundIds.length === 0;
+}
+
 function advanceKingOfHillState(rawState) {
   const state = normalizeKingOfHillState(rawState);
   let championId = null;
 
   while (championId === null && state.currentChoices.length < 2) {
+    if (state.currentChoices.length === 0 && isKingOfHillTripleChoice(state)) {
+      state.currentChoices = [
+        state.remainingIds.shift(),
+        state.remainingIds.shift(),
+        state.remainingIds.shift(),
+      ];
+      break;
+    }
+
     if (state.remainingIds.length >= 2) {
       state.currentChoices = [state.remainingIds.shift(), state.remainingIds.shift()];
       break;
@@ -1676,6 +1705,7 @@ function getKingOfHillProgress(userId) {
     runId: run.id,
     roundNumber: advanced.state.roundNumber,
     matchNumber: advanced.state.matchNumber,
+    stageType: advanced.state.currentChoices.length === 3 ? "triple" : "pair",
     totalParticipants: advanced.state.totalParticipants,
     matchesPlayed: advanced.state.matchesPlayed,
     remainingInRound: advanced.state.remainingIds.length + advanced.state.currentChoices.length,
@@ -1713,19 +1743,24 @@ function getKingOfHillStats(pollId, userId, runId) {
         khm.match_number,
         khm.left_participant_id,
         khm.right_participant_id,
+        khm.third_participant_id,
         khm.winner_participant_id,
         khm.loser_participant_id,
+        khm.loser_participant_ids_json,
         khm.created_at,
         left_p.name AS left_name,
         left_p.image_url AS left_image_url,
         right_p.name AS right_name,
         right_p.image_url AS right_image_url,
+        third_p.name AS third_name,
+        third_p.image_url AS third_image_url,
         winner_p.name AS winner_name,
         winner_p.image_url AS winner_image_url,
         loser_p.name AS loser_name
       FROM king_of_hill_matches khm
       JOIN participants left_p ON left_p.id = khm.left_participant_id
       JOIN participants right_p ON right_p.id = khm.right_participant_id
+      LEFT JOIN participants third_p ON third_p.id = khm.third_participant_id
       JOIN participants winner_p ON winner_p.id = khm.winner_participant_id
       JOIN participants loser_p ON loser_p.id = khm.loser_participant_id
       WHERE khm.run_id = ?
@@ -1736,20 +1771,29 @@ function getKingOfHillStats(pollId, userId, runId) {
       ...match,
       left_image_url: buildParticipantImageUrl(match.left_image_url),
       right_image_url: buildParticipantImageUrl(match.right_image_url),
+      third_image_url: buildParticipantImageUrl(match.third_image_url),
       winner_image_url: buildParticipantImageUrl(match.winner_image_url),
     }));
 
   const runParticipantMap = new Map();
   runMatches.forEach((match) => {
-    [match.left_participant_id, match.right_participant_id].forEach((participantId, index) => {
+    [
+      [match.left_participant_id, match.left_name, match.left_image_url],
+      [match.right_participant_id, match.right_name, match.right_image_url],
+      [match.third_participant_id, match.third_name, match.third_image_url],
+    ].forEach(([participantId, participantName, participantImageUrl]) => {
+      if (!participantId) {
+        return;
+      }
+
       if (runParticipantMap.has(participantId)) {
         return;
       }
 
       runParticipantMap.set(participantId, {
         id: participantId,
-        name: index === 0 ? match.left_name : match.right_name,
-        image_url: index === 0 ? match.left_image_url : match.right_image_url,
+        name: participantName,
+        image_url: participantImageUrl,
         wins: 0,
         losses: 0,
         roundsReached: 1,
@@ -1759,17 +1803,22 @@ function getKingOfHillStats(pollId, userId, runId) {
 
   runMatches.forEach((match) => {
     const winner = runParticipantMap.get(match.winner_participant_id);
-    const loser = runParticipantMap.get(match.loser_participant_id);
+    const loserIds = parseLoserIds(match.loser_participant_ids_json, match.loser_participant_id);
 
     if (winner) {
       winner.wins += 1;
       winner.roundsReached = Math.max(winner.roundsReached, match.round_number + 1);
     }
 
-    if (loser) {
+    loserIds.forEach((loserId) => {
+      const loser = runParticipantMap.get(loserId);
+      if (!loser) {
+        return;
+      }
+
       loser.losses += 1;
       loser.roundsReached = Math.max(loser.roundsReached, match.round_number);
-    }
+    });
   });
 
   const champion = targetRun.champion_participant_id
@@ -1803,17 +1852,34 @@ function getKingOfHillStats(pollId, userId, runId) {
         p.name,
         p.image_url,
         SUM(CASE WHEN khm.winner_participant_id = p.id THEN 1 ELSE 0 END) AS win_count,
-        SUM(CASE WHEN khm.loser_participant_id = p.id THEN 1 ELSE 0 END) AS loss_count,
         SUM(
           CASE
-            WHEN khm.winner_participant_id = p.id OR khm.loser_participant_id = p.id THEN 1
+            WHEN khm.loser_participant_id = p.id
+              OR EXISTS (
+                SELECT 1
+                FROM json_each(COALESCE(khm.loser_participant_ids_json, '[]'))
+                WHERE json_each.value = p.id
+              )
+            THEN 1
+            ELSE 0
+          END
+        ) AS loss_count,
+        SUM(
+          CASE
+            WHEN khm.winner_participant_id = p.id
+              OR khm.left_participant_id = p.id
+              OR khm.right_participant_id = p.id
+              OR khm.third_participant_id = p.id
+            THEN 1
             ELSE 0
           END
         ) AS appearance_count
       FROM king_of_hill_matches khm
       JOIN participants p
         ON p.id = khm.winner_participant_id
-        OR p.id = khm.loser_participant_id
+        OR p.id = khm.left_participant_id
+        OR p.id = khm.right_participant_id
+        OR p.id = khm.third_participant_id
       JOIN king_of_hill_runs khr ON khr.id = khm.run_id
       WHERE khm.poll_id = ?
         AND khr.completed_at IS NOT NULL
@@ -2646,27 +2712,14 @@ app.get("/", async (req, res) => {
     activePolls.length === 1 ? `/polls/${activePolls[0].slug}` : "/";
   req.session.returnTo = postLoginReturnTo;
 
-  let registrations = [];
-  let bettingCatalogAvailable = true;
-
-  try {
-    registrations = await loadRegistrationsCatalog();
-  } catch {
-    bettingCatalogAvailable = false;
-  }
-
-  const globalBettingStage = bettingCatalogAvailable
-    ? buildBettingStageData(req.session.user?.id, registrations)
-    : null;
-
   res.render("polls-index", {
     polls,
     telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
     telegramAuthUrl: buildTelegramAuthUrl(postLoginReturnTo),
-    bettingCatalogAvailable,
+    bettingCatalogAvailable: false,
     expandedBetSlug: String(req.query.bet || "").trim(),
-    globalBettingStage,
+    globalBettingStage: null,
   });
 });
 
@@ -2782,13 +2835,6 @@ app.get("/polls/:slug/report", async (req, res) => {
   }
 
   const report = getPollReportData(poll.id);
-
-  try {
-    const registrations = await loadRegistrationsCatalog();
-    report.participants = enrichParticipantsFromRegistrations(report.participants, registrations);
-  } catch {
-    // Keep report rendering even if registrations are temporarily unavailable.
-  }
 
   res.render("report", {
     poll,
@@ -3071,7 +3117,8 @@ app.post("/king-of-hill/pick", ensureUser, (req, res) => {
     return res.redirect("/king-of-hill?koh_error=stale_choice");
   }
 
-  const loserId = choiceIds.find((id) => id !== winnerId);
+  const loserIds = choiceIds.filter((id) => id !== winnerId);
+  const loserId = loserIds[0] || winnerId;
   const timestamp = nowIso();
   db.prepare(`
     INSERT INTO king_of_hill_matches (
@@ -3082,10 +3129,12 @@ app.post("/king-of-hill/pick", ensureUser, (req, res) => {
       match_number,
       left_participant_id,
       right_participant_id,
+      third_participant_id,
       winner_participant_id,
       loser_participant_id,
+      loser_participant_ids_json,
       created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     runId,
     kingOfHillScopePollId,
@@ -3093,9 +3142,11 @@ app.post("/king-of-hill/pick", ensureUser, (req, res) => {
     state.roundNumber,
     state.matchNumber,
     state.currentChoices[0],
-    state.currentChoices[1],
+    state.currentChoices[1] || state.currentChoices[0],
+    state.currentChoices[2] || null,
     winnerId,
     loserId,
+    JSON.stringify(loserIds),
     timestamp,
   );
 
