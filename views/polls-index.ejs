@@ -38,6 +38,10 @@
           <span class="eyebrow">Голосования</span>
           <h1>Выберите этап.</h1>
           <p>У каждого этапа свои участники, своя ссылка и отдельное прохождение.</p>
+          <div class="hero-actions">
+            <a class="ghost-button" href="/king-of-hill">Царь горы</a>
+            <a class="ghost-button" href="/?bet=burmalda#bet-panel-burmalda">Бурмалда</a>
+          </div>
           <% if (!currentUser && telegramConfigured) { %>
             <div class="widget-wrap">
               <script
@@ -73,6 +77,28 @@
               <% } %>
             </article>
           <% }) %>
+        </section>
+
+        <section class="cards-grid cards-grid-secondary">
+          <article class="mini-card mini-card-feature">
+            <img class="mini-card-cover mini-card-cover-top" src="/witcher-choice.png" alt="Царь горы" loading="lazy" decoding="async" />
+            <div>
+              <strong>Царь горы</strong>
+              <p>Отдельная игра по всем участникам. Победители проходят дальше, пока не останется один.</p>
+              <span class="status-open">Отдельный режим</span>
+            </div>
+            <a class="primary-button" href="/king-of-hill">Открыть Царя горы</a>
+          </article>
+
+          <article class="mini-card mini-card-feature">
+            <img class="mini-card-cover mini-card-cover-top" src="/burmalda.png" alt="Бурмалда" loading="lazy" decoding="async" />
+            <div>
+              <strong>Бурмалда</strong>
+              <p>Ставки по корзинам на будущих победителей. После ставки открываются текущие проценты.</p>
+              <span class="status-open">Мини-игра</span>
+            </div>
+            <a class="primary-button" href="/?bet=burmalda#bet-panel-burmalda">Открыть Бурмальду</a>
+          </article>
         </section>
 
         <% if (globalBettingStage && globalBettingStage.availableBasketCount > 0) { %>

@@ -2735,14 +2735,27 @@ app.get("/", async (req, res) => {
     activePolls.length === 1 ? `/polls/${activePolls[0].slug}` : "/";
   req.session.returnTo = postLoginReturnTo;
 
+  let registrations = [];
+  let bettingCatalogAvailable = true;
+
+  try {
+    registrations = await loadRegistrationsCatalog();
+  } catch {
+    bettingCatalogAvailable = false;
+  }
+
+  const globalBettingStage = bettingCatalogAvailable
+    ? buildBettingStageData(req.session.user?.id, registrations)
+    : null;
+
   res.render("polls-index", {
     polls,
     telegramConfigured: Boolean(TELEGRAM_BOT_USERNAME && TELEGRAM_BOT_TOKEN),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
     telegramAuthUrl: buildTelegramAuthUrl(postLoginReturnTo),
-    bettingCatalogAvailable: false,
+    bettingCatalogAvailable,
     expandedBetSlug: String(req.query.bet || "").trim(),
-    globalBettingStage: null,
+    globalBettingStage,
   });
 });
 

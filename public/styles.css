@@ -399,6 +399,22 @@ textarea {
   object-fit: cover;
 }
 
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.cards-grid-secondary {
+  margin-top: 28px;
+}
+
+.mini-card-feature {
+  position: relative;
+  overflow: hidden;
+}
+
 .page-preloader {
   position: fixed;
   inset: 0;
