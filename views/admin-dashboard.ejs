@@ -20,6 +20,7 @@
           <h1>Статистика голосования</h1>
         </div>
         <div class="dashboard-topbar-actions">
+          <a class="ghost-button" href="/admin/king-of-hill/report">Отчет Царя горы</a>
           <a class="ghost-button" href="/admin/play">Play</a>
           <form method="post" action="/admin/logout">
             <button class="ghost-button" type="submit">Выйти</button>
@@ -159,6 +160,124 @@
             </div>
           </form>
         </article>
+      </section>
+
+      <section class="panel">
+        <div class="king-panel-header">
+          <div>
+            <span class="eyebrow">Отдельная игра</span>
+            <h2>Царь горы</h2>
+          </div>
+          <div class="poll-group-meta">
+            <span>Прохождений: <%= kingOfHillReport.totals.completedRuns %></span>
+            <span>Пользователей: <%= kingOfHillReport.totals.uniqueUsers %></span>
+            <span>Средний состав: <%= Math.round(kingOfHillReport.totals.averageParticipants || 0) %></span>
+          </div>
+        </div>
+
+        <div class="cards-grid cards-grid-secondary">
+          <article class="mini-card mini-card-feature">
+            <img class="mini-card-cover mini-card-cover-top" src="/witcher-choice.png" alt="Царь горы" loading="lazy" decoding="async" />
+            <div>
+              <strong>Пользовательский превью-отчет</strong>
+              <p>Открывает страницу `Царя горы` и её общий итоговый блок, который видят пользователи после завершения прохождения.</p>
+              <span><%= baseUrl %>/king-of-hill</span>
+            </div>
+            <a class="primary-button" href="/king-of-hill">Открыть Царя горы</a>
+            <a class="ghost-button" href="/admin/king-of-hill/report">Открыть админ-отчет</a>
+          </article>
+        </div>
+
+        <div class="king-stats-grid">
+          <article class="panel king-stats-card">
+            <h3>Общие победители</h3>
+            <% if (kingOfHillReport.champions.length === 0) { %>
+              <div class="notice">Пока никто не завершил Царя горы.</div>
+            <% } else { %>
+              <div class="king-stat-list">
+                <% kingOfHillReport.champions.forEach((participant, index) => { %>
+                  <div class="king-stat-row">
+                    <div class="king-stat-user">
+                      <% if (participant.image_url) { %>
+                        <img src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                      <% } else { %>
+                        <span class="report-user-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                      <% } %>
+                      <strong><%= index + 1 %>. <%= participant.name %></strong>
+                    </div>
+                    <span>Титулов: <%= participant.champion_count %></span>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </article>
+
+          <article class="panel king-stats-card">
+            <h3>Победы в матчах</h3>
+            <% if (kingOfHillReport.matchLeaders.length === 0) { %>
+              <div class="notice">Пока нет матчей для анализа.</div>
+            <% } else { %>
+              <div class="king-stat-list">
+                <% kingOfHillReport.matchLeaders.forEach((participant) => { %>
+                  <div class="king-stat-row">
+                    <div class="king-stat-user">
+                      <% if (participant.image_url) { %>
+                        <img src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                      <% } else { %>
+                        <span class="report-user-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                      <% } %>
+                      <strong><%= participant.name %></strong>
+                    </div>
+                    <span>Побед: <%= participant.win_count %></span>
+                    <span>Появлений: <%= participant.appearance_count %></span>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </article>
+
+          <article class="panel king-stats-card king-stats-card-wide">
+            <h3>Последние завершенные прохождения</h3>
+            <% if (kingOfHillReport.recentRuns.length === 0) { %>
+              <div class="notice">Пока нет завершенных прохождений.</div>
+            <% } else { %>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Когда</th>
+                      <th>Пользователь</th>
+                      <th>Победитель</th>
+                      <th>Участников</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% kingOfHillReport.recentRuns.forEach((run) => { %>
+                      <tr>
+                        <td><%= formatDate(run.completed_at) %></td>
+                        <td>
+                          <%= run.full_name || "—" %>
+                          <%= run.username ? `(@${run.username})` : "" %>
+                        </td>
+                        <td>
+                          <div class="king-stat-user">
+                            <% if (run.champion_image_url) { %>
+                              <img src="<%= run.champion_image_url %>" alt="<%= run.champion_name || '—' %>" loading="lazy" decoding="async" />
+                            <% } else { %>
+                              <span class="report-user-avatar report-user-fallback"><%= (run.champion_name || "?").trim().charAt(0).toUpperCase() %></span>
+                            <% } %>
+                            <strong><%= run.champion_name || "—" %></strong>
+                          </div>
+                        </td>
+                        <td><%= run.total_participants %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </article>
+        </div>
       </section>
 
       <section class="panel">

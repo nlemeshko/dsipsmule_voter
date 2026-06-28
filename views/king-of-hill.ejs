@@ -187,6 +187,29 @@
                 <% } %>
               </article>
 
+              <article class="panel king-stats-card">
+                <h3>Общий результат всех пользователей</h3>
+                <% if (stats.aggregateChampions.length === 0) { %>
+                  <div class="notice">Пока нет завершенных пользовательских прохождений.</div>
+                <% } else { %>
+                  <div class="king-stat-list">
+                    <% stats.aggregateChampions.forEach((participant, index) => { %>
+                      <div class="king-stat-row">
+                        <div class="king-stat-user">
+                          <% if (participant.image_url) { %>
+                            <img src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                          <% } else { %>
+                            <span class="report-user-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                          <% } %>
+                          <strong><%= index + 1 %>. <%= participant.name %></strong>
+                        </div>
+                        <span>Побед в турнире: <%= participant.champion_count %></span>
+                      </div>
+                    <% }) %>
+                  </div>
+                <% } %>
+              </article>
+
               <article class="panel king-stats-card king-stats-card-wide">
                 <h3>Самые частые победы в матчах</h3>
                 <% if (stats.aggregatePicks.length === 0) { %>

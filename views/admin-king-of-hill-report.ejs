@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Отчет Царя горы</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Amatic+SC:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell dashboard-shell">
+      <section class="dashboard-topbar">
+        <div>
+          <span class="eyebrow">Отдельная игра</span>
+          <h1>Отчет Царя горы</h1>
+        </div>
+        <div class="dashboard-topbar-actions">
+          <a class="ghost-button" href="/admin">Назад в админку</a>
+          <a class="ghost-button" href="/king-of-hill">Пользовательская страница</a>
+        </div>
+      </section>
+
+      <section class="stat-grid">
+        <article class="stat-card">
+          <span>Завершенных прохождений</span>
+          <strong><%= report.totals.completedRuns %></strong>
+        </article>
+        <article class="stat-card">
+          <span>Пользователей</span>
+          <strong><%= report.totals.uniqueUsers %></strong>
+        </article>
+        <article class="stat-card">
+          <span>Средний состав</span>
+          <strong><%= Math.round(report.totals.averageParticipants || 0) %></strong>
+        </article>
+      </section>
+
+      <section class="king-stats-grid">
+        <article class="panel king-stats-card">
+          <h2>Общие победители</h2>
+          <% if (report.champions.length === 0) { %>
+            <div class="notice">Пока никто не завершил Царя горы.</div>
+          <% } else { %>
+            <div class="king-stat-list">
+              <% report.champions.forEach((participant, index) => { %>
+                <div class="king-stat-row">
+                  <div class="king-stat-user">
+                    <% if (participant.image_url) { %>
+                      <img src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                    <% } else { %>
+                      <span class="report-user-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                    <% } %>
+                    <strong><%= index + 1 %>. <%= participant.name %></strong>
+                  </div>
+                  <span>Титулов: <%= participant.champion_count %></span>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </article>
+
+        <article class="panel king-stats-card">
+          <h2>Победы в матчах</h2>
+          <% if (report.matchLeaders.length === 0) { %>
+            <div class="notice">Пока нет матчей для анализа.</div>
+          <% } else { %>
+            <div class="king-stat-list">
+              <% report.matchLeaders.forEach((participant) => { %>
+                <div class="king-stat-row">
+                  <div class="king-stat-user">
+                    <% if (participant.image_url) { %>
+                      <img src="<%= participant.image_url %>" alt="<%= participant.name %>" loading="lazy" decoding="async" />
+                    <% } else { %>
+                      <span class="report-user-avatar report-user-fallback"><%= (participant.name || "?").trim().charAt(0).toUpperCase() %></span>
+                    <% } %>
+                    <strong><%= participant.name %></strong>
+                  </div>
+                  <span>Побед: <%= participant.win_count %></span>
+                  <span>Появлений: <%= participant.appearance_count %></span>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </article>
+
+        <article class="panel king-stats-card king-stats-card-wide">
+          <h2>Последние завершенные прохождения</h2>
+          <% if (report.recentRuns.length === 0) { %>
+            <div class="notice">Пока нет завершенных прохождений.</div>
+          <% } else { %>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Когда</th>
+                    <th>Пользователь</th>
+                    <th>Победитель</th>
+                    <th>Участников</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% report.recentRuns.forEach((run) => { %>
+                    <tr>
+                      <td><%= formatDate(run.completed_at) %></td>
+                      <td>
+                        <%= run.full_name || "—" %>
+                        <%= run.username ? `(@${run.username})` : "" %>
+                      </td>
+                      <td>
+                        <div class="king-stat-user">
+                          <% if (run.champion_image_url) { %>
+                            <img src="<%= run.champion_image_url %>" alt="<%= run.champion_name || '—' %>" loading="lazy" decoding="async" />
+                          <% } else { %>
+                            <span class="report-user-avatar report-user-fallback"><%= (run.champion_name || "?").trim().charAt(0).toUpperCase() %></span>
+                          <% } %>
+                          <strong><%= run.champion_name || "—" %></strong>
+                        </div>
+                      </td>
+                      <td><%= run.total_participants %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

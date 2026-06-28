@@ -1914,6 +1914,119 @@ function getKingOfHillStats(pollId, userId, runId) {
   };
 }
 
+function getKingOfHillAggregateReport(pollId) {
+  const totals = db
+    .prepare(`
+      SELECT
+        COUNT(*) AS completed_runs,
+        COUNT(DISTINCT user_id) AS unique_users,
+        COALESCE(SUM(total_participants), 0) AS total_participants_sum
+      FROM king_of_hill_runs
+      WHERE poll_id = ?
+        AND completed_at IS NOT NULL
+    `)
+    .get(pollId);
+
+  const champions = db
+    .prepare(`
+      SELECT
+        p.id,
+        p.name,
+        p.image_url,
+        COUNT(*) AS champion_count
+      FROM king_of_hill_runs khr
+      JOIN participants p ON p.id = khr.champion_participant_id
+      WHERE khr.poll_id = ?
+        AND khr.completed_at IS NOT NULL
+      GROUP BY p.id, p.name, p.image_url
+      ORDER BY champion_count DESC, p.name ASC
+      LIMIT 20
+    `)
+    .all(pollId)
+    .map((row) => ({
+      ...row,
+      champion_count: Number(row.champion_count || 0),
+      image_url: buildParticipantImageUrl(row.image_url),
+    }));
+
+  const matchLeaders = db
+    .prepare(`
+      SELECT
+        p.id,
+        p.name,
+        p.image_url,
+        SUM(CASE WHEN khm.winner_participant_id = p.id THEN 1 ELSE 0 END) AS win_count,
+        SUM(
+          CASE
+            WHEN khm.left_participant_id = p.id
+              OR khm.right_participant_id = p.id
+              OR khm.third_participant_id = p.id
+            THEN 1
+            ELSE 0
+          END
+        ) AS appearance_count
+      FROM king_of_hill_matches khm
+      JOIN participants p
+        ON p.id = khm.left_participant_id
+        OR p.id = khm.right_participant_id
+        OR p.id = khm.third_participant_id
+        OR p.id = khm.winner_participant_id
+      JOIN king_of_hill_runs khr ON khr.id = khm.run_id
+      WHERE khm.poll_id = ?
+        AND khr.completed_at IS NOT NULL
+      GROUP BY p.id, p.name, p.image_url
+      ORDER BY win_count DESC, appearance_count DESC, p.name ASC
+      LIMIT 20
+    `)
+    .all(pollId)
+    .map((row) => ({
+      ...row,
+      win_count: Number(row.win_count || 0),
+      appearance_count: Number(row.appearance_count || 0),
+      image_url: buildParticipantImageUrl(row.image_url),
+    }));
+
+  const recentRuns = db
+    .prepare(`
+      SELECT
+        khr.id,
+        khr.started_at,
+        khr.completed_at,
+        khr.total_participants,
+        tu.full_name,
+        tu.username,
+        p.name AS champion_name,
+        p.image_url AS champion_image_url
+      FROM king_of_hill_runs khr
+      JOIN telegram_users tu ON tu.id = khr.user_id
+      LEFT JOIN participants p ON p.id = khr.champion_participant_id
+      WHERE khr.poll_id = ?
+        AND khr.completed_at IS NOT NULL
+      ORDER BY khr.completed_at DESC
+      LIMIT 20
+    `)
+    .all(pollId)
+    .map((row) => ({
+      ...row,
+      total_participants: Number(row.total_participants || 0),
+      champion_image_url: buildParticipantImageUrl(row.champion_image_url),
+    }));
+
+  return {
+    totals: {
+      completedRuns: Number(totals.completed_runs || 0),
+      uniqueUsers: Number(totals.unique_users || 0),
+      averageParticipants:
+        Number(totals.completed_runs || 0) > 0
+          ? Number(totals.total_participants_sum || 0) / Number(totals.completed_runs || 1)
+          : 0,
+    },
+    champions,
+    matchLeaders,
+    recentRuns,
+  };
+}
+
 function getPolls() {
   return db
     .prepare(`
@@ -2486,7 +2599,19 @@ function adminStats() {
     };
   });
 
-  return { totals, leaderboard, recentVotes, recentUsers, recentBets, participants, polls, pollsWithParticipants };
+  const kingOfHillReport = getKingOfHillAggregateReport(kingOfHillScopePollId);
+
+  return {
+    totals,
+    leaderboard,
+    recentVotes,
+    recentUsers,
+    recentBets,
+    participants,
+    polls,
+    pollsWithParticipants,
+    kingOfHillReport,
+  };
 }
 
 function getAdminPlayData(selectedPollId) {
@@ -3425,6 +3550,16 @@ app.get("/admin", ensureAdmin, async (req, res) => {
       registrationsError: error.message || "Не удалось загрузить список регистраций.",
     });
   }
+});
+
+app.get("/admin/king-of-hill/report", ensureAdmin, (req, res) => {
+  const report = getKingOfHillAggregateReport(kingOfHillScopePollId);
+
+  res.render("admin-king-of-hill-report", {
+    report,
+    formatDate,
+    baseUrl: BASE_URL,
+  });
 });
 
 app.get("/admin/play", ensureAdmin, (req, res) => {
